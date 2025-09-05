@@ -1,7 +1,7 @@
 #include "matrix.h"
 
 // Implementation of multiply_matrices
-std::vector<std::vector<int>> multiply_matrices(
+std::vector<std::vector<int>> multiply_matrices_brute_force(
     const std::vector<std::vector<int>>& A, 
     const std::vector<std::vector<int>>& B
 ) {

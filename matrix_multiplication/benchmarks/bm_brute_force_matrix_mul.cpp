@@ -12,7 +12,7 @@ static void BM_BruteForceMatrixMul(benchmark::State& state) {
 
     for (auto _ : state) {
         // Multiply the matrices
-        auto result = multiply_matrices(A, B);
+        auto result = multiply_matrices_brute_force(A, B);
 
         // Prevent the compiler from optimizing out the function call
         benchmark::DoNotOptimize(result);
@@ -22,7 +22,9 @@ static void BM_BruteForceMatrixMul(benchmark::State& state) {
 // Register the function as a benchmark
 BENCHMARK(BM_BruteForceMatrixMul)
     ->RangeMultiplier(2)
-    ->Range(2, 1024);
+    ->Range(2, 1024)
+    ->Complexity();
+
 
 // Run the benchmark
 BENCHMARK_MAIN();
