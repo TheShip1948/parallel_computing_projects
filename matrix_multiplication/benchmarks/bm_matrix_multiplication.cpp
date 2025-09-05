@@ -1,0 +1,58 @@
+#include <benchmark/benchmark.h> 
+#include "matrix_multiply_brute_force.h"
+#include "matrix_multiply_rows.h"
+#include <vector> 
+
+static void BM_BruteForceMatrixMul(benchmark::State& state) {
+    
+    int N = state.range(0);
+    
+    // Create two N×N matrices
+    std::vector<std::vector<int>> A(N, std::vector<int>(N, 1));
+    std::vector<std::vector<int>> B(N, std::vector<int>(N, 2));
+
+    for (auto _ : state) {
+        // Multiply the matrices
+        auto result = multiply_matrices_brute_force(A, B);
+
+        // Prevent the compiler from optimizing out the function call
+        benchmark::DoNotOptimize(result);
+    }
+}
+
+// Register the function as a benchmark
+BENCHMARK(BM_BruteForceMatrixMul)
+    ->RangeMultiplier(2)
+    ->Range(2, 1024)
+    ->Complexity();
+
+
+
+// Implement a benchmark for MatrixMultiplierRows::parallel_multiply_rows and register it with the BENCHMARK macro
+static void BM_ParallelMatrixMul(benchmark::State& state) {
+
+    int N = state.range(0);
+    
+    // Create two N×N matrices
+    std::vector<std::vector<int>> A(N, std::vector<int>(N, 1));
+    std::vector<std::vector<int>> B(N, std::vector<int>(N, 2));
+
+    for (auto _ : state) {
+        // Multiply the matrices
+        MatrixMultiplierRows multiplier(A, B);
+        auto result = multiplier.parallel_multiply_rows(multiplier.get_optimal_thread_count(20));
+
+        // Prevent the compiler from optimizing out the function call
+        benchmark::DoNotOptimize(result);
+    }
+}
+
+// Register the function as a benchmark
+BENCHMARK(BM_ParallelMatrixMul)
+    ->RangeMultiplier(2)
+    ->Range(2, 1024)
+    ->Complexity();     
+    
+
+// Run the benchmark
+BENCHMARK_MAIN();

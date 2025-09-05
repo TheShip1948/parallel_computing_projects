@@ -1,5 +1,5 @@
 
-add_executable(benchmarks bm_brute_force_matrix_mul.cpp)
+add_executable(benchmarks bm_matrix_multiplication.cpp)
 
 # Link against Google Benchmark
 find_package(benchmark REQUIRED)

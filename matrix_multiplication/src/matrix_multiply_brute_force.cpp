@@ -1,4 +1,4 @@
-#include "matrix.h"
+#include "matrix_multiply_brute_force.h"
 
 // Implementation of multiply_matrices
 std::vector<std::vector<int>> multiply_matrices_brute_force(
