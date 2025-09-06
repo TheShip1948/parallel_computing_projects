@@ -1,6 +1,7 @@
 #include <benchmark/benchmark.h> 
 #include "matrix_multiply_brute_force.h"
 #include "matrix_multiply_rows.h"
+#include "matrix_multiply_cols.h"
 #include <vector> 
 
 static void BM_BruteForceMatrixMul(benchmark::State& state) {
@@ -53,6 +54,31 @@ BENCHMARK(BM_ParallelMatrixMul)
     ->Range(2, 1024)
     ->Complexity();     
     
+
+// Implement a benchmark for MatrixMultiplierCols::parallel_multiply_cols and register it with the BENCHMARK macro
+static void BM_ParallelMatrixMulCols(benchmark::State& state) {
+
+    int N = state.range(0);
+    
+    // Create two N×N matrices
+    std::vector<std::vector<int>> A(N, std::vector<int>(N, 1));
+    std::vector<std::vector<int>> B(N, std::vector<int>(N, 2));
+
+    for (auto _ : state) {
+        // Multiply the matrices
+        MatrixMultiplierCols multiplier(A, B);
+        auto result = multiplier.parallel_multiply_cols(multiplier.get_optimal_thread_count(20));
+
+        // Prevent the compiler from optimizing out the function call
+        benchmark::DoNotOptimize(result);
+    }
+}
+
+// Register the function as a benchmark
+BENCHMARK(BM_ParallelMatrixMulCols)
+    ->RangeMultiplier(2)
+    ->Range(2, 1024)
+    ->Complexity();
 
 // Run the benchmark
 BENCHMARK_MAIN();
