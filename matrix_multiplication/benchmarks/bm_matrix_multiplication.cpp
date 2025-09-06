@@ -2,6 +2,7 @@
 #include "matrix_multiply_brute_force.h"
 #include "matrix_multiply_rows.h"
 #include "matrix_multiply_cols.h"
+#include "matrix_multiply_blocks.h"
 #include <vector> 
 
 static void BM_BruteForceMatrixMul(benchmark::State& state) {
@@ -24,7 +25,7 @@ static void BM_BruteForceMatrixMul(benchmark::State& state) {
 // Register the function as a benchmark
 BENCHMARK(BM_BruteForceMatrixMul)
     ->RangeMultiplier(2)
-    ->Range(2, 1024)
+    ->Range(2, 2048)
     ->Complexity();
 
 
@@ -51,7 +52,7 @@ static void BM_ParallelMatrixMul(benchmark::State& state) {
 // Register the function as a benchmark
 BENCHMARK(BM_ParallelMatrixMul)
     ->RangeMultiplier(2)
-    ->Range(2, 1024)
+    ->Range(2, 2048)
     ->Complexity();     
     
 
@@ -77,8 +78,34 @@ static void BM_ParallelMatrixMulCols(benchmark::State& state) {
 // Register the function as a benchmark
 BENCHMARK(BM_ParallelMatrixMulCols)
     ->RangeMultiplier(2)
-    ->Range(2, 1024)
+    ->Range(2, 2048)
     ->Complexity();
+
+// Implement a benchmark for MatrixMultiplierBlocks::parallel_multiply_blocks and register it with the BENCHMARK macro
+static void BM_ParallelMatrixMulBlocks(benchmark::State& state) {
+
+    int N = state.range(0);
+    
+    // Create two N×N matrices
+    std::vector<std::vector<int>> A(N, std::vector<int>(N, 1));
+    std::vector<std::vector<int>> B(N, std::vector<int>(N, 2));
+
+    for (auto _ : state) {
+        // Multiply the matrices
+        MatrixMultiplierBlocks multiplier(A, B);
+        auto result = multiplier.parallel_multiply_blocks(multiplier.get_optimal_thread_count(20));
+
+        // Prevent the compiler from optimizing out the function call
+        benchmark::DoNotOptimize(result);
+    }
+}
+
+// Register the function as a benchmark
+BENCHMARK(BM_ParallelMatrixMulBlocks)
+    ->RangeMultiplier(2)
+    ->Range(2, 2048)
+    ->Complexity();
+
 
 // Run the benchmark
 BENCHMARK_MAIN();
