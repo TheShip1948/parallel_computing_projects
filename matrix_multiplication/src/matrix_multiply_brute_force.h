@@ -3,16 +3,7 @@
 #include <stdexcept>
 #include <string>
 #include <iostream>
-
-class MatrixDimensionError : public std::exception {
-private: 
-    std::string message; 
-public: 
-    MatrixDimensionError(const std::string& msg) : message(msg) {} 
-    const char* what() const noexcept override {
-        return message.c_str(); 
-    }
-};
+#include "matrix_exceptions.h"
 
 // Function declaration
 std::vector<std::vector<int>> multiply_matrices_brute_force(

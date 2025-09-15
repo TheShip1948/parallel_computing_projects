@@ -3,6 +3,7 @@
 #include "matrix_multiply_rows.h"
 #include "matrix_multiply_cols.h"
 #include "matrix_multiply_blocks.h"
+#include "matrix_multiply_strassen.h"
 #include <vector> 
 
 static void BM_BruteForceMatrixMul(benchmark::State& state) {
@@ -106,6 +107,27 @@ BENCHMARK(BM_ParallelMatrixMulBlocks)
     ->Range(2, 2048)
     ->Complexity();
 
+// Implement a benchmark for MatrixMultiplierStrassen::parallel_multiply_strassen and register it with the BENCHMARK macro
+static void BM_ParallelMatrixMulStrassen(benchmark::State& state) {
 
+    int N = state.range(0);
+    
+    // Create two N×N matrices
+    std::vector<std::vector<int>> A(N, std::vector<int>(N, 1));
+    std::vector<std::vector<int>> B(N, std::vector<int>(N, 2));
+
+    for (auto _ : state) {
+        // Multiply the matrices
+        auto result2_strassen = MatrixMultiplierStrassen::multiplyStrassen(A, B);
+        benchmark::DoNotOptimize(result2_strassen);    
+    }
+}
+
+// Register the function as a benchmark
+BENCHMARK(BM_ParallelMatrixMulStrassen)
+    ->RangeMultiplier(2)
+    ->Range(2, 2048)
+    ->Complexity();
+    
 // Run the benchmark
 BENCHMARK_MAIN();
