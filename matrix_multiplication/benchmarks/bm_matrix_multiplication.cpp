@@ -4,6 +4,7 @@
 #include "matrix_multiply_cols.h"
 #include "matrix_multiply_blocks.h"
 #include "matrix_multiply_strassen.h"
+#include "matrix_multiply_cuda.h"
 #include <vector> 
 
 static void BM_BruteForceMatrixMul(benchmark::State& state) {
@@ -128,6 +129,28 @@ BENCHMARK(BM_ParallelMatrixMulStrassen)
     ->RangeMultiplier(2)
     ->Range(2, 2048)
     ->Complexity();
+
+// Implement a benchmark for Matrixmultipliercuda::parallel_multiply_cuda and register it with the BENCHMARK macro
+static void BM_ParallelMatrixMulCuda(benchmark::State& state) {
+
+    int N = state.range(0);
     
+    // Create two N×N matrices
+    std::vector<std::vector<int>> A(N, std::vector<int>(N, 1));
+    std::vector<std::vector<int>> B(N, std::vector<int>(N, 2));
+
+    for (auto _ : state) {
+        // Multiply the matrices
+        auto result2_cuda = MatrixMultiplyCuda::multiply(A, B);
+        benchmark::DoNotOptimize(result2_cuda);    
+    }
+}
+
+// Register the function as a benchmark
+BENCHMARK(BM_ParallelMatrixMulCuda)
+    ->RangeMultiplier(2)
+    ->Range(2, 2048)
+    ->Complexity();
+
 // Run the benchmark
 BENCHMARK_MAIN();
