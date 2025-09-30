@@ -4,7 +4,8 @@
 #include "matrix_multiply_cols.h"
 #include "matrix_multiply_blocks.h"
 #include "matrix_multiply_strassen.h"
-#include "matrix_multiply_cuda.h"
+// #include "matrix_multiply_cuda.h"
+#include "matrix_multiplier_cacheoblivious.h"
 #include <vector> 
 
 static void BM_BruteForceMatrixMul(benchmark::State& state) {
@@ -131,7 +132,30 @@ BENCHMARK(BM_ParallelMatrixMulStrassen)
     ->Complexity();
 
 // Implement a benchmark for Matrixmultipliercuda::parallel_multiply_cuda and register it with the BENCHMARK macro
-static void BM_ParallelMatrixMulCuda(benchmark::State& state) {
+// static void BM_ParallelMatrixMulCuda(benchmark::State& state) {
+
+//     int N = state.range(0);
+    
+//     // Create two N×N matrices
+//     std::vector<std::vector<int>> A(N, std::vector<int>(N, 1));
+//     std::vector<std::vector<int>> B(N, std::vector<int>(N, 2));
+
+//     for (auto _ : state) {
+//         // Multiply the matrices
+//         auto result2_cuda = MatrixMultiplyCuda::multiply(A, B);
+//         benchmark::DoNotOptimize(result2_cuda);    
+//     }
+// }
+
+// // Register the function as a benchmark
+// BENCHMARK(BM_ParallelMatrixMulCuda)
+//     ->RangeMultiplier(2)
+//     ->Range(2, 2048)
+//     ->Complexity();
+
+
+// Implement a benchmark for MatrixMultiplierCacheOblivious::parallel_multiply_cache_oblivious and register it with the BENCHMARK macro
+static void BM_ParallelMatrixMulCacheOblivious(benchmark::State& state) {
 
     int N = state.range(0);
     
@@ -141,13 +165,16 @@ static void BM_ParallelMatrixMulCuda(benchmark::State& state) {
 
     for (auto _ : state) {
         // Multiply the matrices
-        auto result2_cuda = MatrixMultiplyCuda::multiply(A, B);
-        benchmark::DoNotOptimize(result2_cuda);    
+        MatrixMultiplierCacheOblivious multiplier(A, B);
+        auto result = multiplier.parallel_multiply_cacheoblivious(multiplier.get_optimal_thread_count(20)); 
+
+        // Prevent the compiler from optimizing out the function call
+        benchmark::DoNotOptimize(result);
     }
 }
 
 // Register the function as a benchmark
-BENCHMARK(BM_ParallelMatrixMulCuda)
+BENCHMARK(BM_ParallelMatrixMulCacheOblivious)
     ->RangeMultiplier(2)
     ->Range(2, 2048)
     ->Complexity();
