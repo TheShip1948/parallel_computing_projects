@@ -7,7 +7,8 @@ int main() {
     std::vector<std::vector<int>> A = {{1,2,3},{4,5,6}};
     std::vector<std::vector<int>> B = {{7,8},{9,10},{11,12}};
 
-    auto result = multiply_matrices_brute_force(A, B);
+    MatrixMultiplierBruteForce multiplier_brute_force(A,B); 
+    auto result = multiplier_brute_force.multiply_matrices_brute_force();
     utils::print_matrix(result);
 
     MatrixMultiplierRows  multiplier(A, B);

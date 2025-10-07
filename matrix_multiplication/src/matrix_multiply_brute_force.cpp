@@ -1,41 +1,34 @@
 #include "matrix_multiply_brute_force.h"
 
+MatrixMultiplierBruteForce::MatrixMultiplierBruteForce(
+    const std::vector<std::vector<int>>& a, 
+    const std::vector<std::vector<int>>& b
+): A(a), B(b) {
+    rows_A = A.size();
+    cols_A = A[0].size();
+    cols_B = B[0].size();
+    C.resize(rows_A, std::vector<int>(cols_B, 0));
+}
+
 // Implementation of multiply_matrices
-std::vector<std::vector<int>> multiply_matrices_brute_force(
-    const std::vector<std::vector<int>>& A, 
-    const std::vector<std::vector<int>>& B
-) {
+std::vector<std::vector<int>> MatrixMultiplierBruteForce::multiply_matrices_brute_force() {
     if(A.empty() || B.empty()){
         throw MatrixDimensionError("Input matrices cannot be empty.");
     }
 
-    int rowsA = A.size(); 
-    int colsA = A[0].size();
-    int rowsB = B.size();
-    int colsB = B[0].size(); 
+    int rows_B = B.size();
 
-    if(colsA != rowsB) {
+    if(cols_A != rows_B) {
         throw MatrixDimensionError("Number of columns in A must equal number of rows in B.");
     }
 
-    std::vector<std::vector<int>> result(rowsA, std::vector<int>(colsB, 0)); 
-
-    for(int i = 0; i < rowsA; ++i) {
-        for(int j = 0; j < colsB; ++j) {
-            for(int k = 0; k < colsA; ++k) {
-                result[i][j] += A[i][k] * B[k][j];
+    for(int i = 0; i < rows_A; ++i) {
+        for(int j = 0; j < cols_B; ++j) {
+            for(int k = 0; k < cols_A; ++k) {
+                C[i][j] += A[i][k] * B[k][j];
             }
         }
     }
-    return result; 
+    return C; 
 }
 
-// Implementation of printMatrix
-void printMatrix(const std::vector<std::vector<int>>& matrix) {
-    for (const auto& row : matrix) {
-        for (int val : row) {
-            std::cout << val << " ";
-        }
-        std::cout << std::endl;
-    }
-}
