@@ -14,6 +14,7 @@ project(mat_multiply CXX)
 
 add_library(mat_multiply 
                 matrix_exceptions.cpp 
+                utility.cpp 
                 matrix_multiply_brute_force.cpp 
                 matrix_multiply_rows.cpp 
                 matrix_multiply_cols.cpp 

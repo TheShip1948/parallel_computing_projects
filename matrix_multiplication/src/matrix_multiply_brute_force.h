@@ -10,6 +10,3 @@ std::vector<std::vector<int>> multiply_matrices_brute_force(
     const std::vector<std::vector<int>>& A, 
     const std::vector<std::vector<int>>& B
 );
-
-// Helper function
-void printMatrix(const std::vector<std::vector<int>>& matrix);
