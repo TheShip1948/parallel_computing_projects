@@ -110,6 +110,32 @@ BENCHMARK(BM_ParallelMatrixMulBlocks)
     ->Range(2, 2048)
     ->Complexity();
 
+
+static void BM_ParallelMatrixMulBlocks_future(benchmark::State& state) {
+
+    int N = state.range(0);
+    
+    // Create two N×N matrices
+    std::vector<std::vector<int>> A(N, std::vector<int>(N, 1));
+    std::vector<std::vector<int>> B(N, std::vector<int>(N, 2));
+
+    for (auto _ : state) {
+        // Multiply the matrices
+        MatrixMultiplierBlocks multiplier(A, B);
+        auto result = multiplier.parallel_multiply_blocks_futures(multiplier.get_optimal_thread_count(20)); 
+
+        // Prevent the compiler from optimizing out the function call
+        benchmark::DoNotOptimize(result);
+    }
+}
+
+// Register the function as a benchmark
+BENCHMARK(BM_ParallelMatrixMulBlocks_future)
+    ->RangeMultiplier(2)
+    ->Range(2, 2048)
+    ->Complexity();
+
+
 // Implement a benchmark for MatrixMultiplierStrassen::parallel_multiply_strassen and register it with the BENCHMARK macro
 static void BM_ParallelMatrixMulStrassen(benchmark::State& state) {
 
@@ -132,6 +158,8 @@ BENCHMARK(BM_ParallelMatrixMulStrassen)
     ->Range(2, 2048)
     ->Complexity();
 
+
+    
 // Implement a benchmark for Matrixmultipliercuda::parallel_multiply_cuda and register it with the BENCHMARK macro
 // static void BM_ParallelMatrixMulCuda(benchmark::State& state) {
 

@@ -62,11 +62,6 @@ Matrix MatrixMultiplierStrassen::standardMultiply(const Matrix& A, const Matrix&
     return result;
 }
 
-// Public interface for standard multiplication
-Matrix MatrixMultiplierStrassen::multiplyStandard(const Matrix& A, const Matrix& B) {
-    return standardMultiply(A, B);
-}
-
 // Matrix addition
 Matrix MatrixMultiplierStrassen::addMatrices(const Matrix& A, const Matrix& B) {
     int rows = A.size();
@@ -235,18 +230,4 @@ Matrix MatrixMultiplierStrassen::multiplyStrassen(const Matrix& A, const Matrix&
     
     // Remove padding and return result
     return unpadMatrix(paddedResult, rowsA, colsB);
-}
-
-// Utility functions
-Matrix MatrixMultiplierStrassen::createMatrix(int rows, int cols, int value) {
-    return Matrix(rows, std::vector<int>(cols, value));
-}
-
-void MatrixMultiplierStrassen::printMatrix(const Matrix& matrix) {
-    for (const auto& row : matrix) {
-        for (int val : row) {
-            std::cout << val << "\t";
-        }
-        std::cout << std::endl;
-    }
 }

@@ -33,12 +33,9 @@ private:
     
 public:
     // Main multiplication functions
-    static Matrix multiplyStandard(const Matrix& A, const Matrix& B);
     static Matrix multiplyStrassen(const Matrix& A, const Matrix& B);
     
     // Utility functions
-    static void printMatrix(const Matrix& matrix);
-    static Matrix createMatrix(int rows, int cols, int value = 0);
     static int nextPowerOfTwo(int n);
 };
 
