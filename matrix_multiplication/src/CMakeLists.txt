@@ -23,7 +23,7 @@ add_library(mat_multiply
                 matrix_multiplier_cacheoblivious.cpp
             )  
 
-target_include_directories(mat_multiply PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(mat_multiply PUBLIC ${PROJECT_SOURCE_DIR}/../include)
 
 # Tell CMake to allow separable compilation for CUDA
 #set_target_properties(mat_multiply PROPERTIES
