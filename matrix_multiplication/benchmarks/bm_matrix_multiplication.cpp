@@ -35,7 +35,7 @@ BENCHMARK(BM_BruteForceMatrixMul)
 
 
 // Implement a benchmark for MatrixMultiplierRows::parallel_multiply_rows and register it with the BENCHMARK macro
-static void BM_ParallelMatrixMul(benchmark::State& state) {
+static void BM_ParallelMatrixMulRows(benchmark::State& state) {
 
     int N = state.range(0);
     
@@ -54,7 +54,7 @@ static void BM_ParallelMatrixMul(benchmark::State& state) {
 }
 
 // Register the function as a benchmark
-BENCHMARK(BM_ParallelMatrixMul)
+BENCHMARK(BM_ParallelMatrixMulRows)
     ->RangeMultiplier(2)
     ->Range(2, 2048)
     ->Complexity();     
@@ -137,7 +137,7 @@ BENCHMARK(BM_ParallelMatrixMulBlocks_future)
 
 
 // Implement a benchmark for MatrixMultiplierStrassen::parallel_multiply_strassen and register it with the BENCHMARK macro
-static void BM_ParallelMatrixMulStrassen(benchmark::State& state) {
+static void BM_MatrixMulStrassen(benchmark::State& state) {
 
     int N = state.range(0);
     
@@ -153,12 +153,10 @@ static void BM_ParallelMatrixMulStrassen(benchmark::State& state) {
 }
 
 // Register the function as a benchmark
-BENCHMARK(BM_ParallelMatrixMulStrassen)
+BENCHMARK(BM_MatrixMulStrassen)
     ->RangeMultiplier(2)
     ->Range(2, 2048)
     ->Complexity();
-
-
     
 // Implement a benchmark for Matrixmultipliercuda::parallel_multiply_cuda and register it with the BENCHMARK macro
 // static void BM_ParallelMatrixMulCuda(benchmark::State& state) {
