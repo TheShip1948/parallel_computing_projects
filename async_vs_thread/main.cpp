@@ -34,9 +34,8 @@ static void BM_Async(benchmark::State& state) {
     }
 }
 
-// Register the benchmarks with a smaller iteration count for faster execution during benchmark loop
-// 1,000,000 iterations should be enough to show a difference but fast enough to run multiple times.
-BENCHMARK(BM_Thread)->Arg(1000000);
-BENCHMARK(BM_Async)->Arg(1000000);
+// Register the benchmarks with a range of iterations from 2 to 256
+BENCHMARK(BM_Thread)->Range(2, 256)->Unit(benchmark::kMillisecond);
+BENCHMARK(BM_Async)->Range(2, 256)->Unit(benchmark::kMillisecond);
 
 BENCHMARK_MAIN();
