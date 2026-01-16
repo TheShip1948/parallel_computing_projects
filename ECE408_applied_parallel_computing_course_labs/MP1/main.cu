@@ -4,8 +4,6 @@
 #include <cmath>
 #include <cuda_runtime.h>
 
-
-
 __global__ void vecMul(const float *in1, const float *in2, float *out, int len) {
     int i = threadIdx.x + blockDim.x * blockIdx.x;
     if (i < len) {

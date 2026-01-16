@@ -14,10 +14,17 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 add_executable(vector_multiply main.cu)
 
+# set_target_properties(vector_multiply PROPERTIES
+#     CUDA_SEPARABLE_COMPILATION ON
+#     CUDA_ARCHITECTURES "native"
+# )
+
+
 set_target_properties(vector_multiply PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
-    CUDA_ARCHITECTURES "native"
+    CUDA_ARCHITECTURES "61"
 )
+
 
 # For the actual target build, we also ensure the property is set correctly (though the env var helps too)
 if(WIN32)
