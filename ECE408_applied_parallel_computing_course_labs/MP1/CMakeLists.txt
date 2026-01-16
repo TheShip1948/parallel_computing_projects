@@ -3,23 +3,28 @@ cmake_minimum_required(VERSION 3.18)
 # We set the environment variable CUDAFLAGS to pass the vital /MD flag to the compiler 
 # during the internal CMake consistency checks. This aligns the MSVC host compiler 
 # with the CUDA Toolkit defaults, preventing the LNK1120 errors.
+
 set(ENV{CUDAFLAGS} "-Xcompiler=/MD")
 
 project(VectorMultiplication LANGUAGES CXX CUDA)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_STANDARD 14)
+
+set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
 add_executable(vector_multiply main.cu)
 
+# Note: native is not working through cmake from visual studio build tools 
+#       that is the more portable solution, but skipped as it is not working with my 
+#       current toolchain setup 
 # set_target_properties(vector_multiply PROPERTIES
 #     CUDA_SEPARABLE_COMPILATION ON
 #     CUDA_ARCHITECTURES "native"
 # )
 
-
+# TODO: that code is not portable to other architectures 
 set_target_properties(vector_multiply PROPERTIES
     CUDA_SEPARABLE_COMPILATION ON
     CUDA_ARCHITECTURES "61"
