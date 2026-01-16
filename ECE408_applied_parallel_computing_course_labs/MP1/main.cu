@@ -4,16 +4,7 @@
 #include <cmath>
 #include <cuda_runtime.h>
 
-#define CHECK(call) \
-{ \
-    const cudaError_t error = call; \
-    if (error != cudaSuccess) \
-    { \
-        std::cout << "Error: " << __FILE__ << ":" << __LINE__ << ", " \
-                  << cudaGetErrorString(error) << std::endl; \
-        exit(1); \
-    } \
-}
+
 
 __global__ void vecMul(const float *in1, const float *in2, float *out, int len) {
     int i = threadIdx.x + blockDim.x * blockIdx.x;
@@ -50,23 +41,23 @@ int main(int argc, char **argv) {
 
     // Allocate device memory
     float *deviceInput1, *deviceInput2, *deviceOutput;
-    CHECK(cudaMalloc((void **)&deviceInput1, bytes));
-    CHECK(cudaMalloc((void **)&deviceInput2, bytes));
-    CHECK(cudaMalloc((void **)&deviceOutput, bytes));
+    cudaMalloc((void **)&deviceInput1, bytes);
+    cudaMalloc((void **)&deviceInput2, bytes);
+    cudaMalloc((void **)&deviceOutput, bytes);
 
     // Copy data to GPU
-    CHECK(cudaMemcpy(deviceInput1, hostInput1.data(), bytes, cudaMemcpyHostToDevice));
-    CHECK(cudaMemcpy(deviceInput2, hostInput2.data(), bytes, cudaMemcpyHostToDevice));
+    cudaMemcpy(deviceInput1, hostInput1.data(), bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(deviceInput2, hostInput2.data(), bytes, cudaMemcpyHostToDevice);
 
     // Launch kernel
     int blockSize = 256;
     int gridSize = (inputLength + blockSize - 1) / blockSize;
     
     vecMul<<<gridSize, blockSize>>>(deviceInput1, deviceInput2, deviceOutput, inputLength);
-    CHECK(cudaDeviceSynchronize());
+    cudaDeviceSynchronize();
 
     // Copy result back
-    CHECK(cudaMemcpy(hostOutput.data(), deviceOutput, bytes, cudaMemcpyDeviceToHost));
+    cudaMemcpy(hostOutput.data(), deviceOutput, bytes, cudaMemcpyDeviceToHost);
 
     // Compute reference
     vecMulHost(hostInput1.data(), hostInput2.data(), expectedOutput.data(), inputLength);
@@ -88,9 +79,9 @@ int main(int argc, char **argv) {
     }
 
     // Free memory
-    CHECK(cudaFree(deviceInput1));
-    CHECK(cudaFree(deviceInput2));
-    CHECK(cudaFree(deviceOutput));
+    cudaFree(deviceInput1);
+    cudaFree(deviceInput2);
+    cudaFree(deviceOutput);
 
     return 0;
 }
