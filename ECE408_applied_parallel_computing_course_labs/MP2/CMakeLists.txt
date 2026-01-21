@@ -13,7 +13,6 @@ set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 find_package(CUDA REQUIRED)
 
 # Set CUDA architectures (adjust based on your GPU)
-# Common values: 50, 60, 61, 70, 75, 80, 86, 89, 90
 set(CMAKE_CUDA_ARCHITECTURES 61)
 
 # Add executable

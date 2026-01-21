@@ -24,25 +24,6 @@ void initMatrix(float* mat, int rows, int cols) {
     }
 }
 
-// Host function to verify results
-bool verifyResult(float* A, float* B, float* C, int M, int N, int K) {
-    const float epsilon = 1e-3;
-    for (int i = 0; i < M; i++) {
-        for (int j = 0; j < K; j++) {
-            float sum = 0.0f;
-            for (int k = 0; k < N; k++) {
-                sum += A[i * N + k] * B[k * K + j];
-            }
-            if (fabs(C[i * K + j] - sum) > epsilon) {
-                std::cout << "Mismatch at (" << i << "," << j << "): "
-                          << "Expected " << sum << ", Got " << C[i * K + j] << std::endl;
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
 int main() {
     // Matrix dimensions: A(M x N), B(N x K), C(M x K)
     int M = 1024;
@@ -111,21 +92,7 @@ int main() {
     }
     
     std::cout << "\nKernel execution time: " << milliseconds << " ms" << std::endl;
-    
-    // Calculate GFLOPS
-    // float gflops = (2.0f * M * N * K) / (milliseconds * 1e6);
-    // std::cout << "Performance: " << gflops << " GFLOPS" << std::endl;
-    
-    // Verify result (only for small matrices to avoid long verification)
-    if (M <= 256 && N <= 256 && K <= 256) {
-        std::cout << "\nVerifying results..." << std::endl;
-        if (verifyResult(h_A, h_B, h_C, M, N, K)) {
-            std::cout << "Result verified: PASSED" << std::endl;
-        } else {
-            std::cout << "Result verified: FAILED" << std::endl;
-        }
-    }
-    
+        
     // Cleanup
     cudaFree(d_A);
     cudaFree(d_B);
