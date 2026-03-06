@@ -1,7 +1,7 @@
 
-#include <iostream>
-#include <vector>
-#include <cmath>
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
 #include <cuda_runtime.h>
 
 __global__ void vecMul(const float *in1, const float *in2, float *out, int len) {
@@ -23,13 +23,13 @@ int main(int argc, char **argv) {
 
     size_t bytes = inputLength * sizeof(float);
 
-    std::cout << "Vector Multiplication with size " << inputLength << std::endl;
+    printf("Vector Multiplication with size %d\n", inputLength);
 
     // Allocate host memory
-    std::vector<float> hostInput1(inputLength);
-    std::vector<float> hostInput2(inputLength);
-    std::vector<float> hostOutput(inputLength);
-    std::vector<float> expectedOutput(inputLength);
+    float* hostInput1 = (float*)malloc(bytes);
+    float* hostInput2 = (float*)malloc(bytes);
+    float* hostOutput = (float*)malloc(bytes);
+    float* expectedOutput = (float*)malloc(bytes);
 
     // Initialize data
     for (int i = 0; i < inputLength; ++i) {
@@ -44,8 +44,8 @@ int main(int argc, char **argv) {
     cudaMalloc((void **)&deviceOutput, bytes);
 
     // Copy data to GPU
-    cudaMemcpy(deviceInput1, hostInput1.data(), bytes, cudaMemcpyHostToDevice);
-    cudaMemcpy(deviceInput2, hostInput2.data(), bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(deviceInput1, hostInput1, bytes, cudaMemcpyHostToDevice);
+    cudaMemcpy(deviceInput2, hostInput2, bytes, cudaMemcpyHostToDevice);
 
     // Launch kernel
     int blockSize = 256;
@@ -55,31 +55,35 @@ int main(int argc, char **argv) {
     cudaDeviceSynchronize();
 
     // Copy result back
-    cudaMemcpy(hostOutput.data(), deviceOutput, bytes, cudaMemcpyDeviceToHost);
+    cudaMemcpy(hostOutput, deviceOutput, bytes, cudaMemcpyDeviceToHost);
 
     // Compute reference
-    vecMulHost(hostInput1.data(), hostInput2.data(), expectedOutput.data(), inputLength);
+    vecMulHost(hostInput1, hostInput2, expectedOutput, inputLength);
 
     // Verify
     bool match = true;
     for (int i = 0; i < inputLength; ++i) {
-        if (std::abs(hostOutput[i] - expectedOutput[i]) > 1e-5) {
-            std::cout << "Mismatch at " << i << ": " << hostOutput[i] << " != " << expectedOutput[i] << std::endl;
+        if (fabs(hostOutput[i] - expectedOutput[i]) > 1e-5) {
+            printf("Mismatch at %d: %f != %f\n", i, hostOutput[i], expectedOutput[i]);
             match = false;
             break;
         }
     }
 
     if (match) {
-        std::cout << "Test Passed!" << std::endl;
+        printf("Test Passed!\n");
     } else {
-        std::cout << "Test Failed!" << std::endl;
+        printf("Test Failed!\n");
     }
 
     // Free memory
     cudaFree(deviceInput1);
     cudaFree(deviceInput2);
     cudaFree(deviceOutput);
+    free(hostInput1);
+    free(hostInput2);
+    free(hostOutput);
+    free(expectedOutput);
 
     return 0;
 }

@@ -19,11 +19,11 @@ if %errorlevel% neq 0 (
     echo Attempting fallback to direct NVCC compilation...
     
     echo Building with NVCC...
-    nvcc main.cu -o build/vector_multiply.exe -Xcompiler /MD
+    nvcc main.cu -o build/vector_multiply.exe
     
-    if %errorlevel% neq 0 (
+    if not exist build\vector_multiply.exe (
         echo Fallback Build failed!
-        exit /b %errorlevel%
+        exit /b 1
     )
     echo Fallback Build Successful! Executable is in build/vector_multiply.exe
     exit /b 0
