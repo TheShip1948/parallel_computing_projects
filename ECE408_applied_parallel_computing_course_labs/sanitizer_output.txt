@@ -1,0 +1,85 @@
+﻿=================================================
+Lab: MP1_vector_addition
+=================================================
+Found executable: D:\Git\parallel_computing_projects\ECE408_applied_parallel_computing_course_labs\MP1_vector_addition\build\vector_multiply.exe
+Running compute-sanitizer...
+========= COMPUTE-SANITIZER
+Vector Multiplication with size 1024
+Test Passed!
+========= ERROR SUMMARY: 0 errors
+
+=================================================
+Lab: MP2_dense_matrix_multiplication
+=================================================
+Found executable: D:\Git\parallel_computing_projects\ECE408_applied_parallel_computing_course_labs\MP2_dense_matrix_multiplication\build\matmul.exe
+Running compute-sanitizer...
+========= COMPUTE-SANITIZER
+Matrix dimensions: A(1024x1024), B(1024x1024), C(1024x1024)
+Grid dimensions: (64, 64)
+Block dimensions: (16, 16)
+
+Kernel execution time: 3024.36 ms
+========= ERROR SUMMARY: 0 errors
+
+=================================================
+Lab: MP3_tiled_dense_matrix_multiplication
+=================================================
+Found executable: D:\Git\parallel_computing_projects\ECE408_applied_parallel_computing_course_labs\MP3_tiled_dense_matrix_multiplication\build\matmul.exe
+Running compute-sanitizer...
+========= COMPUTE-SANITIZER
+Starting tiled matrix multiplication
+Matrix dimensions: A(1024x1024), B(1024x1024), C(1024x1024)
+Grid dimensions: (35, 35)
+Block dimensions: (30, 30)
+
+Kernel execution time (Tiled): 1122.33 ms
+========= ERROR SUMMARY: 0 errors
+
+=================================================
+Lab: MP4_tiled_2D_convolution
+=================================================
+No executable found in MP4_tiled_2D_convolution, skipping.
+
+=================================================
+Lab: MP5_1D_list_reduction
+=================================================
+No executable found in MP5_1D_list_reduction, skipping.
+
+=================================================
+Lab: MP6_1D_list_scan
+=================================================
+Found executable: D:\Git\parallel_computing_projects\ECE408_applied_parallel_computing_course_labs\MP6_1D_list_scan\build\scan.exe
+Running compute-sanitizer...
+========= COMPUTE-SANITIZER
+--- MP6: Prefix Sum (Scan) Comparison ---
+Array Size: 1024
+
+Results Comparison (over 1000 iterations):
+1. Kogge-Stone: 0.299056 ms (CORRECT)
+2. Brent-Kung:  0.210845 ms (CORRECT)
+Execution Time Ratio (KS / BK): 1.418364x
+
+Work Efficiency Analysis:
+Kogge-Stone Work (Approximation): N log2(N) = 1024 * 10.000000 = 10240.000000 additions.
+Brent-Kung Work (Approximation): 2 * (N - 1) = 2046 additions.
+Work Ratio (KS / BK): 5.004888x
+
+SUCCESS: Both implementations are correct!
+========= ERROR SUMMARY: 0 errors
+
+=================================================
+Lab: MP7_image_histogram_equalization_algo
+=================================================
+Found executable: D:\Git\parallel_computing_projects\ECE408_applied_parallel_computing_course_labs\MP7_image_histogram_equalization_algo\build\MP7.exe
+Running compute-sanitizer...
+========= COMPUTE-SANITIZER
+========= ERROR SUMMARY: 0 errors
+
+=================================================
+Lab: MP8_SpMV_JDS
+=================================================
+Found executable: D:\Git\parallel_computing_projects\ECE408_applied_parallel_computing_course_labs\MP8_SpMV_JDS\build\MP8.exe
+Running compute-sanitizer...
+========= COMPUTE-SANITIZER
+========= ERROR SUMMARY: 0 errors
+
