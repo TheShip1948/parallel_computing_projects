@@ -15,7 +15,7 @@ call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary
 
 :: Attempt to compile the code
 echo Compiling test3.cpp...
-nvcc -O2 -I..\..\eigen-3.4.0 -I..\..\include -allow-unsupported-compiler .\test3.cpp -o %BUILD_DIR%\%EXECUTABLE%
+nvcc -O2 -I..\..\eigen-3.4.0 -I..\..\include -allow-unsupported-compiler .\test3.cpp ..\..\utils\mnist_loader.cpp -o %BUILD_DIR%\%EXECUTABLE%
 
 :: Check if the compilation succeeded
 if %errorlevel% equ 0 (
