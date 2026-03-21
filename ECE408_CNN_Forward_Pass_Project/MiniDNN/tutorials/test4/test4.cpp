@@ -3,6 +3,7 @@
 #include <Eigen/Core>
 #include <iostream>
 #include <vector>
+#include <chrono>
 
 using namespace MiniDNN;
 
@@ -24,7 +25,10 @@ int main()
         return 1;
     }
 
-    std::cout << "Test size: " << test_data.size() << std::endl;
+    int n_test_original = test_data.size();
+    int n_test = n_test_original * 5;
+    std::cout << "Original Test size: " << n_test_original << std::endl;
+    std::cout << "Extended Test size: " << n_test << " (5x repeat)" << std::endl;
 
     // Create a network object
     Network net;
@@ -38,41 +42,44 @@ int main()
         return 1;
     }
 
-    // Map to Eigen format for the first 5 images
-    int n_test = 5;
+    // Map to Eigen format for all test images (repeated 5 times)
     int n_pixels = test_data.rows() * test_data.cols();
 
     Matrix x_test(n_pixels, n_test);
     Eigen::RowVectorXi y_test(n_test);
 
     for (int i = 0; i < n_test; i++) {
-        std::vector<double> image = test_data.images(i);
+        std::vector<double> image = test_data.images(i % n_test_original);
         for (int j = 0; j < n_pixels; j++) {
             x_test(j, i) = image[j];
         }
-        y_test(i) = test_data.labels(i);
+        y_test(i) = test_data.labels(i % n_test_original);
     }
 
-    // Predict
-    std::cout << "Predicting 5 images..." << std::endl;
+    // Predict with timing
+    std::cout << "Predicting " << n_test << " images..." << std::endl;
+    
+    auto start = std::chrono::high_resolution_clock::now();
     Matrix pred = net.predict(x_test);
+    auto end = std::chrono::high_resolution_clock::now();
+    
+    std::chrono::duration<double> elapsed = end - start;
 
     // Report results
-    std::cout << "-------------------------------------------" << std::endl;
+    int correct_count = 0;
     for (int i = 0; i < n_test; i++) {
         int max_idx;
         pred.col(i).maxCoeff(&max_idx);
-        
-        int actual = y_test(i);
-        int predicted = max_idx;
-        bool is_correct = (actual == predicted);
-
-        std::cout << "Image " << i + 1 << ":" << std::endl;
-        std::cout << "  Actual Number:    " << actual << std::endl;
-        std::cout << "  Predicted Number: " << predicted << std::endl;
-        std::cout << "  Result:           " << (is_correct ? "TRUE" : "FALSE") << std::endl;
-        std::cout << "-------------------------------------------" << std::endl;
+        if (max_idx == y_test(i)) {
+            correct_count++;
+        }
     }
+
+    std::cout << "-------------------------------------------" << std::endl;
+    std::cout << "Prediction Step Time: " << elapsed.count() << " seconds" << std::endl;
+    std::cout << "Correct Predictions:  " << correct_count << " / " << n_test << std::endl;
+    std::cout << "Accuracy:             " << (double)correct_count / n_test * 100.0 << "%" << std::endl;
+    std::cout << "-------------------------------------------" << std::endl;
 
     return 0;
 }
