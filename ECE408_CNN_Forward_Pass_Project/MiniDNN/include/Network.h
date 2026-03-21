@@ -511,9 +511,9 @@ class Network
         ///
         void export_net(const std::string& folder, const std::string& filename) const
         {
-            bool created = internal::create_directory(folder);
-            if (!created)
-                throw std::runtime_error("[class Network]: Folder creation failed");
+            internal::create_directory(folder);
+            // We ignore the return value because create_directory returns false if the folder already exists
+            // and we still want to proceed in that case.
 
             MetaInfo map = this->get_meta_info();
             internal::write_map(folder + "/" + filename, map);

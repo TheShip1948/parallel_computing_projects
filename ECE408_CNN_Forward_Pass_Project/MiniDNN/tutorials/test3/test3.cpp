@@ -114,5 +114,9 @@ int main()
 
     std::cout << "Test accuracy: " << (double)correct / n_test * 100.0 << "%" << std::endl;
 
+    // Export the network to NetFolder
+    std::cout << "Saving network to NetFolder..." << std::endl;
+    net.export_net("./NetFolder/", "NetFile");
+
     return 0;
 }
