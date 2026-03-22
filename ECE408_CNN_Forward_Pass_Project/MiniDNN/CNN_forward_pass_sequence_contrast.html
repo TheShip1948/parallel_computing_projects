@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CNN Forward Pass — Sequence Diagram</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #ffffff;
+    --bg2:       #f8f8f6;
+    --bg3:       #f0efeb;
+    --border:    rgba(0,0,0,0.18);
+    --text:      #0f0f0e;
+    --muted:     #3d3d3a;
+    --accent:    #1241b3;
+    --accent2:   #5521a8;
+    --teal:      #065f46;
+    --coral:     #9f1239;
+    --amber:     #92400e;
+    --lifeline:  rgba(0,0,0,0.14);
+
+    --col-client:  #1241b3;
+    --col-network: #5521a8;
+    --col-conv:    #065f46;
+    --col-pool:    #92400e;
+    --col-fc:      #7c2d12;
+    --col-output:  #9f1239;
+
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding: 48px 32px 80px;
+  }
+
+  /* ── header ── */
+  header {
+    max-width: 1100px;
+    margin: 0 auto 48px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 24px;
+  }
+  header .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  header h1 {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+  header p {
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--muted);
+    font-weight: 300;
+  }
+
+  /* ── diagram wrapper ── */
+  .diagram {
+    max-width: 1100px;
+    margin: 0 auto;
+    position: relative;
+    overflow-x: auto;
+  }
+
+  /* ── participant row ── */
+  .participants {
+    display: grid;
+    grid-template-columns: 120px repeat(6, 1fr);
+    gap: 0;
+    margin-bottom: 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+    padding-bottom: 0;
+  }
+
+  .participant {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+
+  .participant-box {
+    border: 1px solid;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-align: center;
+    line-height: 1.4;
+    width: 90%;
+    max-width: 130px;
+    background: var(--bg2);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  }
+
+  .participant-box .role {
+    font-size: 9px;
+    font-weight: 400;
+    opacity: 0.65;
+    display: block;
+    margin-bottom: 2px;
+  }
+
+  .p-client  { border-color: var(--col-client);  color: var(--col-client); }
+  .p-network { border-color: var(--col-network); color: var(--col-network); }
+  .p-conv    { border-color: var(--col-conv);    color: var(--col-conv); }
+  .p-pool    { border-color: var(--col-pool);    color: var(--col-pool); }
+  .p-fc      { border-color: var(--col-fc);      color: var(--col-fc); }
+  .p-output  { border-color: var(--col-output);  color: var(--col-output); }
+
+  /* lifeline tick from box bottom */
+  .lifeline-tick {
+    width: 1px;
+    height: 16px;
+    background: var(--lifeline);
+  }
+
+  /* ── sequence body ── */
+  .sequence-body {
+    display: grid;
+    grid-template-columns: 120px repeat(6, 1fr);
+  }
+
+  /* lifeline columns (background) */
+  .lifelines {
+    display: grid;
+    grid-template-columns: 120px repeat(6, 1fr);
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+  }
+
+  .lifeline-col { border-right: 1px dashed var(--lifeline); }
+  .lifeline-col:last-child { border-right: none; }
+  .lifeline-col-spacer { } /* first empty column */
+
+  /* ── rows ── */
+  .seq-section {
+    grid-column: 1 / -1;
+    background: rgba(255,255,255,0.02);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 6px 0 6px 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin: 12px 0 0;
+  }
+
+  .seq-row {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 120px repeat(6, 1fr);
+    align-items: center;
+    min-height: 52px;
+    position: relative;
+  }
+
+  .seq-row:hover {
+    background: rgba(255,255,255,0.015);
+  }
+
+  /* step number */
+  .step-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    padding: 0 8px 0 4px;
+    text-align: right;
+    user-select: none;
+  }
+
+  /* ── arrow ── */
+  .arrow-cell {
+    position: relative;
+    height: 52px;
+  }
+
+  /* The arrow spans multiple columns via absolute positioning on the row */
+  .arrow-line {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    height: 0;
+    display: flex;
+    align-items: center;
+  }
+
+  .arrow-line .line {
+    height: 1.5px;
+    flex: 1;
+    animation: drawLine 0.4s ease forwards;
+    transform-origin: left center;
+  }
+
+  .arrow-line.dashed .line {
+    background: repeating-linear-gradient(
+      to right,
+      currentColor 0, currentColor 6px,
+      transparent 6px, transparent 10px
+    );
+  }
+  .arrow-line.solid .line { }
+
+  /* arrowhead */
+  .arrow-line .head {
+    width: 0; height: 0;
+    flex-shrink: 0;
+  }
+  .arrow-line.right .head {
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 8px solid currentColor;
+  }
+  .arrow-line.left .head {
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-right: 8px solid currentColor;
+  }
+
+  /* label on arrow */
+  .arrow-label {
+    position: absolute;
+    top: calc(50% - 26px);
+    font-family: var(--mono);
+    font-size: 11px;
+    white-space: nowrap;
+    line-height: 1.3;
+  }
+
+  .arrow-label .method {
+    font-weight: 500;
+    display: block;
+  }
+  .arrow-label .detail {
+    font-size: 9.5px;
+    opacity: 0.55;
+    display: block;
+  }
+
+  /* activation box on lifeline */
+  .activation {
+    position: absolute;
+    width: 10px;
+    top: 0; bottom: 0;
+    border-radius: 2px;
+    transform: translateX(-50%);
+    opacity: 0.25;
+  }
+
+  /* self-call loop */
+  .self-call {
+    position: absolute;
+    top: 50%;
+    right: -36px;
+    transform: translateY(-50%);
+    width: 32px;
+    height: 28px;
+    border: 1.5px solid currentColor;
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-end;
+  }
+  .self-call::after {
+    content: '';
+    width: 0; height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-right: 7px solid currentColor;
+    position: absolute;
+    bottom: -5px;
+    left: -1px;
+  }
+
+  .self-label {
+    position: absolute;
+    right: -160px;
+    top: 50%;
+    transform: translateY(-60%);
+    font-family: var(--mono);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+  .self-label .method { font-weight: 500; display: block; }
+  .self-label .detail { font-size: 9px; opacity: 0.55; display: block; }
+
+  /* note box */
+  .note-box {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 4px 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    max-width: 180px;
+    line-height: 1.5;
+  }
+  .note-box::before {
+    content: '// ';
+    color: var(--muted);
+    opacity: 0.5;
+  }
+
+  /* return arrow styling */
+  .return { opacity: 0.5; }
+
+  /* legend */
+  .legend {
+    max-width: 1100px;
+    margin: 36px auto 0;
+    border-top: 1px solid var(--border);
+    padding-top: 20px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--mono);
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .legend-line {
+    width: 28px;
+    height: 1.5px;
+  }
+  .legend-dashed {
+    background: repeating-linear-gradient(
+      to right,
+      var(--muted) 0, var(--muted) 5px,
+      transparent 5px, transparent 9px
+    );
+  }
+  .legend-solid { background: var(--muted); }
+
+  /* entry animation */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .seq-row {
+    animation: fadeUp 0.3s ease both;
+  }
+  .seq-row:nth-child(1)  { animation-delay: 0.05s; }
+  .seq-row:nth-child(2)  { animation-delay: 0.10s; }
+  .seq-row:nth-child(3)  { animation-delay: 0.15s; }
+  .seq-row:nth-child(4)  { animation-delay: 0.20s; }
+  .seq-row:nth-child(5)  { animation-delay: 0.25s; }
+  .seq-row:nth-child(6)  { animation-delay: 0.30s; }
+  .seq-row:nth-child(7)  { animation-delay: 0.35s; }
+  .seq-row:nth-child(8)  { animation-delay: 0.40s; }
+  .seq-row:nth-child(9)  { animation-delay: 0.45s; }
+  .seq-row:nth-child(10) { animation-delay: 0.50s; }
+  .seq-row:nth-child(11) { animation-delay: 0.55s; }
+  .seq-row:nth-child(12) { animation-delay: 0.60s; }
+  .seq-row:nth-child(13) { animation-delay: 0.65s; }
+  .seq-row:nth-child(14) { animation-delay: 0.70s; }
+  .seq-row:nth-child(15) { animation-delay: 0.75s; }
+  .seq-row:nth-child(16) { animation-delay: 0.80s; }
+  .seq-row:nth-child(17) { animation-delay: 0.85s; }
+  .seq-row:nth-child(18) { animation-delay: 0.90s; }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="label">UML · Sequence Diagram</div>
+  <h1>CNN Forward Pass</h1>
+  <p>MiniDNN — data flow from raw input through convolutional, pooling, fully-connected, and output layers.</p>
+</header>
+
+<div class="diagram">
+
+  <!-- ── Participants ── -->
+  <div class="participants">
+    <div></div><!-- spacer -->
+
+    <div class="participant">
+      <div class="participant-box p-client">
+        <span class="role">caller</span>
+        Client
+      </div>
+      <div class="lifeline-tick"></div>
+    </div>
+
+    <div class="participant">
+      <div class="participant-box p-network">
+        <span class="role">orchestrator</span>
+        Network
+      </div>
+      <div class="lifeline-tick"></div>
+    </div>
+
+    <div class="participant">
+      <div class="participant-box p-conv">
+        <span class="role">layer</span>
+        Convolutional
+      </div>
+      <div class="lifeline-tick"></div>
+    </div>
+
+    <div class="participant">
+      <div class="participant-box p-pool">
+        <span class="role">layer</span>
+        MaxPooling
+      </div>
+      <div class="lifeline-tick"></div>
+    </div>
+
+    <div class="participant">
+      <div class="participant-box p-fc">
+        <span class="role">layer</span>
+        FullyConnected
+      </div>
+      <div class="lifeline-tick"></div>
+    </div>
+
+    <div class="participant">
+      <div class="participant-box p-output">
+        <span class="role">loss layer</span>
+        Output
+      </div>
+      <div class="lifeline-tick"></div>
+    </div>
+  </div>
+
+  <!-- ── Sequence SVG ── -->
+  <svg id="seq-svg" width="100%" style="display:block; margin-top:0;" xmlns="http://www.w3.org/2000/svg">
+  </svg>
+
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-line legend-solid"></div>
+    <span>call / message</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-line legend-dashed"></div>
+    <span>return value</span>
+  </div>
+  <div class="legend-item" style="margin-left:8px; color: var(--col-conv)">■ Convolutional</div>
+  <div class="legend-item" style="color: var(--col-pool)">■ MaxPooling</div>
+  <div class="legend-item" style="color: var(--col-fc)">■ FullyConnected</div>
+  <div class="legend-item" style="color: var(--col-output)">■ Output (loss)</div>
+</div>
+
+<script>
+const svg = document.getElementById('seq-svg');
+
+// Column centres (as % of width — resolved at render time)
+// Columns: 0=spacer(label), 1=Client, 2=Network, 3=Conv, 4=Pool, 5=FC, 6=Output
+const COL_COUNT = 7;
+const LABEL_W = 110; // px for step label column
+
+const COLORS = {
+  client:  '#1241b3',
+  network: '#5521a8',
+  conv:    '#065f46',
+  pool:    '#92400e',
+  fc:      '#7c2d12',
+  output:  '#9f1239',
+  muted:   '#6b7280',
+};
+
+// Map participant index to color
+const COL_COLOR = [null, COLORS.client, COLORS.network, COLORS.conv, COLORS.pool, COLORS.fc, COLORS.output];
+
+const ROW_H = 58;
+const SELF_W = 36;
+const ACT_W = 10;
+const FONT_MONO = "'IBM Plex Mono', monospace";
+const FONT_SANS = "'IBM Plex Sans', sans-serif";
+
+// Steps definition
+// type: 'call' | 'return' | 'self' | 'section'
+// from/to: column index (1-6)
+// label: main method name
+// detail: optional sub-label
+const steps = [
+  { type: 'section', text: 'Inference call' },
+  { type: 'call',   from: 1, to: 2, label: 'predict( X )',        detail: 'input matrix  [N × features]',        color: COLORS.network },
+  { type: 'section', text: 'Convolutional layer  ×  (may repeat per conv block)' },
+  { type: 'call',   from: 2, to: 3, label: 'forward( input )',     detail: 'feature maps in',                    color: COLORS.conv },
+  { type: 'self',   col: 3,         label: 'im2col( input )',       detail: 'patch extraction',                   color: COLORS.conv },
+  { type: 'self',   col: 3,         label: 'W · patches + b',       detail: 'filter convolution',                 color: COLORS.conv },
+  { type: 'self',   col: 3,         label: 'Activation::activate()', detail: 'e.g. ReLU element-wise',            color: COLORS.conv },
+  { type: 'return', from: 3, to: 2, label: 'feature_maps',          detail: '[N × C_out × H′ × W′]',             color: COLORS.conv },
+  { type: 'section', text: 'MaxPooling layer' },
+  { type: 'call',   from: 2, to: 4, label: 'forward( feature_maps )', detail: 'spatial downsampling',            color: COLORS.pool },
+  { type: 'self',   col: 4,         label: 'max over pool window',   detail: 'stride × stride regions',           color: COLORS.pool },
+  { type: 'return', from: 4, to: 2, label: 'pooled_maps',            detail: '[N × C × H/2 × W/2]',              color: COLORS.pool },
+  { type: 'section', text: 'FullyConnected layer  ×  (may repeat)' },
+  { type: 'call',   from: 2, to: 5, label: 'forward( flattened )',   detail: 'flatten pooled_maps → vector',     color: COLORS.fc },
+  { type: 'self',   col: 5,         label: 'z = W · x + b',          detail: 'linear projection',                color: COLORS.fc },
+  { type: 'self',   col: 5,         label: 'Activation::activate(z)', detail: 'e.g. ReLU / Softmax',             color: COLORS.fc },
+  { type: 'return', from: 5, to: 2, label: 'activations',             detail: '[N × units]',                     color: COLORS.fc },
+  { type: 'section', text: 'Output layer — prediction & loss seed' },
+  { type: 'call',   from: 2, to: 6, label: 'forward( activations )', detail: 'final layer output',               color: COLORS.output },
+  { type: 'self',   col: 6,         label: 'compute_loss( y, ŷ )',    detail: 'MSE / CrossEntropy',               color: COLORS.output },
+  { type: 'self',   col: 6,         label: 'output_layer gradient',   detail: '∂L/∂ŷ  — seeds backprop',         color: COLORS.output },
+  { type: 'return', from: 6, to: 2, label: 'predictions ŷ',           detail: 'probabilities / regression vals', color: COLORS.output },
+  { type: 'section', text: 'Return to caller' },
+  { type: 'return', from: 2, to: 1, label: 'ŷ  (predictions)',        detail: 'forward pass complete',           color: COLORS.network },
+];
+
+function render() {
+  const W = svg.getBoundingClientRect().width || 1060;
+  const colW = (W - LABEL_W) / 6; // 6 participant columns
+
+  function cx(colIdx) {
+    // colIdx 1-6 → centre x
+    return LABEL_W + (colIdx - 1) * colW + colW / 2;
+  }
+
+  let rows = [];
+  let y = 8;
+
+  steps.forEach((step, i) => {
+    if (step.type === 'section') {
+      rows.push({ step, y, h: 28 });
+      y += 28;
+    } else {
+      rows.push({ step, y, h: ROW_H });
+      y += ROW_H;
+    }
+  });
+
+  const totalH = y + 20;
+  svg.setAttribute('height', totalH);
+  svg.setAttribute('viewBox', `0 0 ${W} ${totalH}`);
+
+  let html = '';
+
+  // ── Lifelines ──
+  for (let c = 1; c <= 6; c++) {
+    const x = cx(c);
+    html += `<line x1="${x}" y1="0" x2="${x}" y2="${totalH}"
+      stroke="${COL_COLOR[c]}" stroke-width="1.5" stroke-dasharray="4 6" opacity="0.35"/>`;
+  }
+
+  // ── Rows ──
+  rows.forEach(({ step, y, h }, idx) => {
+    if (step.type === 'section') {
+      // Section divider
+      html += `
+        <rect x="0" y="${y}" width="${W}" height="${h}" fill="rgba(0,0,0,0.03)"/>
+        <line x1="0" y1="${y}" x2="${W}" y2="${y}" stroke="rgba(0,0,0,0.12)" stroke-width="1"/>
+        <line x1="0" y1="${y+h}" x2="${W}" y2="${y+h}" stroke="rgba(0,0,0,0.12)" stroke-width="1"/>
+        <text x="12" y="${y + h/2 + 4}" font-family="${FONT_MONO}" font-size="10"
+          fill="rgba(0,0,0,0.45)" letter-spacing="0.08em">${step.text.toUpperCase()}</text>
+      `;
+      return;
+    }
+
+    const midY = y + h / 2;
+    const animDelay = idx * 0.04;
+
+    // Hover rect
+    html += `<rect x="0" y="${y}" width="${W}" height="${h}" fill="transparent"
+      style="transition:fill 0.15s" onmouseenter="this.setAttribute('fill','rgba(0,0,0,0.025)')"
+      onmouseleave="this.setAttribute('fill','transparent')"/>`;
+
+    // Step index label
+    const stepNum = rows.slice(0, idx).filter(r => r.step.type !== 'section').length + 1;
+    html += `<text x="${LABEL_W - 8}" y="${midY + 4}" text-anchor="end"
+      font-family="${FONT_MONO}" font-size="10" fill="rgba(0,0,0,0.35)">${stepNum}</text>`;
+
+    if (step.type === 'call' || step.type === 'return') {
+      const x1 = cx(step.from);
+      const x2 = cx(step.to);
+      const goRight = x2 > x1;
+      const isDashed = step.type === 'return';
+      const opacity = isDashed ? 0.75 : 1.0;
+      const arrowX = goRight ? x2 - 10 : x2 + 10;
+
+      // Activation bar on the "active" participant
+      const actCol = step.type === 'call' ? step.to : step.from;
+      html += `<rect x="${cx(actCol) - ACT_W/2}" y="${y + 4}" width="${ACT_W}" height="${h - 8}"
+        rx="2" fill="${COL_COLOR[actCol]}" opacity="0.25"/>`;
+
+      // Line
+      const dash = isDashed ? 'stroke-dasharray="8 5"' : '';
+      html += `<line x1="${x1}" y1="${midY}" x2="${arrowX}" y2="${midY}"
+        stroke="${step.color}" stroke-width="2" opacity="${opacity}" ${dash}
+        style="animation: growLine 0.3s ${animDelay}s ease both"/>`;
+
+      // Arrowhead
+      const points = goRight
+        ? `${x2-10},${midY-5} ${x2},${midY} ${x2-10},${midY+5}`
+        : `${x2+10},${midY-5} ${x2},${midY} ${x2+10},${midY+5}`;
+      html += `<polyline points="${points}" fill="none" stroke="${step.color}"
+        stroke-width="2" stroke-linejoin="round" opacity="${opacity}"/>`;
+
+      // Label
+      const labelX = (x1 + x2) / 2;
+      const labelAnchor = 'middle';
+      html += `
+        <text x="${labelX}" y="${midY - 8}" text-anchor="${labelAnchor}"
+          font-family="${FONT_MONO}" font-size="11" font-weight="500" fill="${step.color}" opacity="${opacity}">
+          ${step.label}
+        </text>
+        <text x="${labelX}" y="${midY + 14}" text-anchor="${labelAnchor}"
+          font-family="${FONT_MONO}" font-size="9.5" fill="${step.color}" opacity="${opacity * 0.65}">
+          ${step.detail || ''}
+        </text>
+      `;
+
+    } else if (step.type === 'self') {
+      const x = cx(step.col);
+      const loopW = 40;
+      const loopH = 24;
+      const top = midY - loopH / 2;
+      const bot = midY + loopH / 2;
+      const right = x + loopW;
+
+      // Activation bar
+      html += `<rect x="${x - ACT_W/2}" y="${y + 4}" width="${ACT_W}" height="${h - 8}"
+        rx="2" fill="${step.color}" opacity="0.25"/>`;
+
+      // Self-call bracket
+      html += `
+        <polyline points="${x},${top} ${right},${top} ${right},${bot} ${x+10},${bot}"
+          fill="none" stroke="${step.color}" stroke-width="2" stroke-linejoin="round" opacity="0.85"/>
+        <polyline points="${x+10},${bot-5} ${x},${bot} ${x+10},${bot+5}"
+          fill="none" stroke="${step.color}" stroke-width="2" stroke-linejoin="round" opacity="0.85"/>
+      `;
+
+      // Label to the right
+      html += `
+        <text x="${right + 8}" y="${midY - 7}" text-anchor="start"
+          font-family="${FONT_MONO}" font-size="11" font-weight="500" fill="${step.color}" opacity="1.0">
+          ${step.label}
+        </text>
+        <text x="${right + 8}" y="${midY + 11}" text-anchor="start"
+          font-family="${FONT_MONO}" font-size="9.5" fill="${step.color}" opacity="0.65">
+          ${step.detail || ''}
+        </text>
+      `;
+    }
+  });
+
+  // CSS animation for line growth
+  html = `<defs><style>
+    @keyframes growLine {
+      from { stroke-dashoffset: 2000; stroke-dasharray: 2000; }
+      to   { stroke-dashoffset: 0; }
+    }
+  </style></defs>` + html;
+
+  svg.innerHTML = html;
+}
+
+render();
+window.addEventListener('resize', render);
+</script>
+</body>
+</html>
