@@ -101,7 +101,7 @@ class Convolutional: public Layer
         void forward(const Matrix& prev_layer_data)
         {
             // Each column is an observation
-            const int nobs = prev_layer_data.cols();
+            const int nobs = prev_layer_data.cols(); // Number of images in the batch 
             // Linear term, z = conv(in, w) + b
             m_z.resize(this->m_out_size, nobs);
             // Convolution
