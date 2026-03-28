@@ -10,6 +10,7 @@
 #include "../Utils/Random.h"
 #include "../Utils/IO.h"
 #include "../Utils/Enum.h"
+// #include "../Utils/ForwardStrategy.h"
 
 
 namespace MiniDNN
@@ -50,8 +51,50 @@ class Convolutional: public Layer
         Matrix m_a;            // Output of this layer, a = act(z)
         Matrix m_din;          // Derivative of the input of this layer
                                // Note that input of this layer is also the output of previous layer
-
+        
     public:
+        class ForwardStrategy {
+            public:            
+                virtual ~ForwardStrategy() = default;           
+                virtual void forward(const Matrix& prev_layer_data, Convolutional<Activation>* layer) = 0;
+        };
+
+        class MiniDNNForwardStrategy : public ForwardStrategy {
+            public:
+                virtual ~MiniDNNForwardStrategy() = default;
+                virtual void forward(const Matrix& prev_layer_data, Convolutional<Activation>* layer) {
+                    // Each column is an observation
+                    const int nobs = prev_layer_data.cols(); // Number of images in the batch 
+                    // Linear term, z = conv(in, w) + b
+                    layer->m_z.resize(layer->m_out_size, nobs);
+                    // Convolution
+                    internal::convolve_valid(layer->m_dim, prev_layer_data.data(), true, nobs,
+                                            layer->m_filter_data.data(), layer->m_z.data()
+                                    );
+                    // Add bias terms
+                    // Each column of m_z contains m_dim.out_channels channels, and each channel has
+                    // m_dim.conv_rows * m_dim.conv_cols elements
+                    int channel_start_row = 0;
+                    const int channel_nelem = layer->m_dim.conv_rows * layer->m_dim.conv_cols;
+
+                    for (int i = 0; i < layer->m_dim.out_channels; i++, channel_start_row += channel_nelem)
+                    {
+                        layer->m_z.block(channel_start_row, 0, channel_nelem, nobs).array() += layer->m_bias[i];
+                    }
+
+                    // Apply activation function
+                    layer->m_a.resize(layer->m_out_size, nobs);
+                    Activation::activate(layer->m_z, layer->m_a);
+                };
+        };
+
+        private: 
+            std::unique_ptr<ForwardStrategy> m_forward_strategy;
+        public: 
+
+        // friend class internal::MiniDNNForwardStrategy;
+        // friend class internal::ForwardStrategy;
+        // friend class ForwardStrategy;
         ///
         /// Constructor
         ///
@@ -69,7 +112,9 @@ class Convolutional: public Layer
                   (in_width - window_width + 1) * (in_height - window_height + 1) * out_channels),
             m_dim(in_channels, out_channels, in_height, in_width, window_height,
                   window_width)
-        {}
+        {
+            m_forward_strategy = std::make_unique<MiniDNNForwardStrategy>();
+        }
 
         void init(const Scalar& mu, const Scalar& sigma, RNG& rng)
         {
@@ -100,28 +145,29 @@ class Convolutional: public Layer
         // http://cs231n.github.io/convolutional-networks/
         void forward(const Matrix& prev_layer_data)
         {
-            // Each column is an observation
-            const int nobs = prev_layer_data.cols(); // Number of images in the batch 
-            // Linear term, z = conv(in, w) + b
-            m_z.resize(this->m_out_size, nobs);
-            // Convolution
-            internal::convolve_valid(m_dim, prev_layer_data.data(), true, nobs,
-                                     m_filter_data.data(), m_z.data()
-                                    );
-            // Add bias terms
-            // Each column of m_z contains m_dim.out_channels channels, and each channel has
-            // m_dim.conv_rows * m_dim.conv_cols elements
-            int channel_start_row = 0;
-            const int channel_nelem = m_dim.conv_rows * m_dim.conv_cols;
+            m_forward_strategy->forward(prev_layer_data, this);
+            // // Each column is an observation
+            // const int nobs = prev_layer_data.cols(); // Number of images in the batch 
+            // // Linear term, z = conv(in, w) + b
+            // m_z.resize(this->m_out_size, nobs);
+            // // Convolution
+            // internal::convolve_valid(m_dim, prev_layer_data.data(), true, nobs,
+            //                          m_filter_data.data(), m_z.data()
+            //                         );
+            // // Add bias terms
+            // // Each column of m_z contains m_dim.out_channels channels, and each channel has
+            // // m_dim.conv_rows * m_dim.conv_cols elements
+            // int channel_start_row = 0;
+            // const int channel_nelem = m_dim.conv_rows * m_dim.conv_cols;
 
-            for (int i = 0; i < m_dim.out_channels; i++, channel_start_row += channel_nelem)
-            {
-                m_z.block(channel_start_row, 0, channel_nelem, nobs).array() += m_bias[i];
-            }
+            // for (int i = 0; i < m_dim.out_channels; i++, channel_start_row += channel_nelem)
+            // {
+            //     m_z.block(channel_start_row, 0, channel_nelem, nobs).array() += m_bias[i];
+            // }
 
-            // Apply activation function
-            m_a.resize(this->m_out_size, nobs);
-            Activation::activate(m_z, m_a);
+            // // Apply activation function
+            // m_a.resize(this->m_out_size, nobs);
+            // Activation::activate(m_z, m_a);
         }
 
         const Matrix& output() const
