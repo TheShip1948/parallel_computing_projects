@@ -88,17 +88,82 @@ class Convolutional: public Layer
         };
 
         class CPUForwardStrategy : public ForwardStrategy {
+            private: 
+            // TODO: Implement convolve. It is a brute force implementation to convolution. 
+            //  it takes batch of images from prev_layer_data and filter from m_filter_data
+            //  and compute the convolution and store it in m_z. It iterates over each image 
+            // and in each image each channerl and in each channel apply filter on the image of 
+            // the channel. The output should be similar to what convolve_valid does, but the 
+            // implementation should be a brute force implementation as I mentioned above. 
+            // I want you to map each channel into a 2D matrix and apply filter on it. 
+            void convolve(const Matrix& prev_layer_data, Convolutional<Activation>* layer) {
+                const int nobs = prev_layer_data.cols();
+                const int in_channels = layer->m_dim.in_channels;
+                const int out_channels = layer->m_dim.out_channels;
+                const int in_h = layer->m_dim.channel_rows;
+                const int in_w = layer->m_dim.channel_cols;
+                const int k_h = layer->m_dim.filter_rows;
+                const int k_w = layer->m_dim.filter_cols;
+                const int out_h = layer->m_dim.conv_rows;
+                const int out_w = layer->m_dim.conv_cols;
+
+                layer->m_z.setZero();
+
+                for (int n = 0; n < nobs; n++) { // Iterate over each image or observation in the batch 
+                    for (int out_c = 0; out_c < out_channels; out_c++) { // Iterate over each output channel 
+                        Eigen::Map<Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>>
+                            out_mat(layer->m_z.data() + n * layer->m_z.rows() + out_c * out_h * out_w, out_h, out_w);
+
+                        for (int in_c = 0; in_c < in_channels; in_c++) { // Iterate over each input channel 
+                            Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>> 
+                                in_mat(prev_layer_data.data() + n * prev_layer_data.rows() + in_c * in_h * in_w, in_h, in_w);
+                            Eigen::Map<const Eigen::Matrix<Scalar, Eigen::Dynamic, Eigen::Dynamic>>
+                                filter_mat(layer->m_filter_data.data() + in_c * (out_channels * k_h * k_w) + out_c * k_h * k_w, k_h, k_w);
+
+                            for (int i = 0; i < out_h; i++) { // Iterate over each row of the output channel 
+                                for (int j = 0; j < out_w; j++) { // Iterate over each column of the output channel
+                                    out_mat(i, j) += (in_mat.block(i, j, k_h, k_w).array() * filter_mat.array()).sum();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             public: 
                 virtual ~CPUForwardStrategy() = default; 
                 virtual void forward(const Matrix& prev_layer_data, Convolutional<Activation>* layer) override {
                     std::cout << "CPU Forward Strategy" << std::endl;
                     // TODO: Implement CPU forward strategy
+                    // Each column is an observation
+                    const int nobs = prev_layer_data.cols(); // Number of images in the batch 
+                    // Linear term, z = conv(in, w) + b
+                    layer->m_z.resize(layer->m_out_size, nobs);
+                    
+                    // Convolution
+                    convolve(prev_layer_data, layer);
+
+                    // Add bias terms
+                    int channel_start_row = 0;
+                    const int channel_nelem = layer->m_dim.conv_rows * layer->m_dim.conv_cols;
+
+                    for (int i = 0; i < layer->m_dim.out_channels; i++, channel_start_row += channel_nelem)
+                    {
+                        layer->m_z.block(channel_start_row, 0, channel_nelem, nobs).array() += layer->m_bias[i];
+                    }
+
+                    // Apply activation function
+                    layer->m_a.resize(layer->m_out_size, nobs);
+                    Activation::activate(layer->m_z, layer->m_a);
                 }
         };
 
         private: 
             std::unique_ptr<ForwardStrategy> m_forward_strategy;
         public: 
+
+        void set_strategy(ForwardStrategy* strategy) {
+            m_forward_strategy.reset(strategy);
+        }
 
         /// Constructor
         ///
@@ -117,8 +182,8 @@ class Convolutional: public Layer
             m_dim(in_channels, out_channels, in_height, in_width, window_height,
                   window_width)
         {
-            // m_forward_strategy = std::make_unique<MiniDNNForwardStrategy>();
-            m_forward_strategy = std::make_unique<CPUForwardStrategy>();
+            m_forward_strategy = std::make_unique<MiniDNNForwardStrategy>();
+            // m_forward_strategy = std::make_unique<CPUForwardStrategy>();
         }
 
         void init(const Scalar& mu, const Scalar& sigma, RNG& rng)
