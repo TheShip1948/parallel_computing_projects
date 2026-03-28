@@ -10,7 +10,6 @@
 #include "../Utils/Random.h"
 #include "../Utils/IO.h"
 #include "../Utils/Enum.h"
-// #include "../Utils/ForwardStrategy.h"
 
 
 namespace MiniDNN
@@ -88,14 +87,19 @@ class Convolutional: public Layer
                 };
         };
 
+        class CPUForwardStrategy : public ForwardStrategy {
+            public: 
+                virtual ~CPUForwardStrategy() = default; 
+                virtual void forward(const Matrix& prev_layer_data, Convolutional<Activation>* layer) override {
+                    std::cout << "CPU Forward Strategy" << std::endl;
+                    // TODO: Implement CPU forward strategy
+                }
+        };
+
         private: 
             std::unique_ptr<ForwardStrategy> m_forward_strategy;
         public: 
 
-        // friend class internal::MiniDNNForwardStrategy;
-        // friend class internal::ForwardStrategy;
-        // friend class ForwardStrategy;
-        ///
         /// Constructor
         ///
         /// \param in_width      Width of the input image in each channel.
@@ -113,7 +117,8 @@ class Convolutional: public Layer
             m_dim(in_channels, out_channels, in_height, in_width, window_height,
                   window_width)
         {
-            m_forward_strategy = std::make_unique<MiniDNNForwardStrategy>();
+            // m_forward_strategy = std::make_unique<MiniDNNForwardStrategy>();
+            m_forward_strategy = std::make_unique<CPUForwardStrategy>();
         }
 
         void init(const Scalar& mu, const Scalar& sigma, RNG& rng)
