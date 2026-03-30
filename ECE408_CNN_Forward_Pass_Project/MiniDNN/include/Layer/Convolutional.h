@@ -10,10 +10,49 @@
 #include "../Utils/Random.h"
 #include "../Utils/IO.h"
 #include "../Utils/Enum.h"
+#include <cuda_runtime.h>
+#include <iostream>
 
 
 namespace MiniDNN
 {
+
+    static __global__ void convolve_kernel(int nobs, int in_channels, int out_channels,
+                                          int in_h, int in_w, int k_h, int k_w,
+                                          int out_h, int out_w,
+                                          const Scalar* input, const Scalar* weights, Scalar* output)
+    {
+        int tx = blockIdx.x * blockDim.x + threadIdx.x; // maps to out_h * out_w (flat)
+        int ty = blockIdx.y * blockDim.y + threadIdx.y; // maps to nobs * out_channels (flat)
+
+        if (tx < out_h * out_w && ty < nobs * out_channels)
+        {
+            int n = ty / out_channels;
+            int out_c = ty % out_channels;
+            int row = tx % out_h; // Column-major: index % rows is row
+            int col = tx / out_h; // Column-major: index / rows is col
+
+            Scalar sum = 0.0;
+            for (int in_c = 0; in_c < in_channels; in_c++)
+            {
+                const Scalar* cur_in = input + n * (in_channels * in_h * in_w) + in_c * (in_h * in_w);
+                const Scalar* cur_w = weights + in_c * (out_channels * k_h * k_w) + out_c * (k_h * k_w);
+
+                for (int i = 0; i < k_h; i++)
+                {
+                    for (int j = 0; j < k_w; j++)
+                    {
+                        int in_row = row + i;
+                        int in_col = col + j;
+                        // Eigen layout: in_col * in_h + in_row
+                        sum += cur_in[in_col * in_h + in_row] * cur_w[j * k_h + i];
+                    }
+                }
+            }
+            int output_idx = n * (out_channels * out_h * out_w) + out_c * (out_h * out_w) + col * out_h + row;
+            output[output_idx] = sum;
+        }
+    }
 
 
 ///
@@ -89,14 +128,7 @@ class Convolutional: public Layer
 
         class CPUForwardStrategy : public ForwardStrategy {
             private: 
-            // TODO: Implement convolve. It is a brute force implementation to convolution. 
-            //  it takes batch of images from prev_layer_data and filter from m_filter_data
-            //  and compute the convolution and store it in m_z. It iterates over each image 
-            // and in each image each channerl and in each channel apply filter on the image of 
-            // the channel. The output should be similar to what convolve_valid does, but the 
-            // implementation should be a brute force implementation as I mentioned above. 
-            // I want you to map each channel into a 2D matrix and apply filter on it. 
-            void convolve(const Matrix& prev_layer_data, Convolutional<Activation>* layer) {
+                void convolve(const Matrix& prev_layer_data, Convolutional<Activation>* layer) {
                 const int nobs = prev_layer_data.cols();
                 const int in_channels = layer->m_dim.in_channels;
                 const int out_channels = layer->m_dim.out_channels;
@@ -128,12 +160,81 @@ class Convolutional: public Layer
                         }
                     }
                 }
-            }
+                }
+
             public: 
                 virtual ~CPUForwardStrategy() = default; 
                 virtual void forward(const Matrix& prev_layer_data, Convolutional<Activation>* layer) override {
                     std::cout << "CPU Forward Strategy" << std::endl;
                     // TODO: Implement CPU forward strategy
+                    // Each column is an observation
+                    const int nobs = prev_layer_data.cols(); // Number of images in the batch 
+                    // Linear term, z = conv(in, w) + b
+                    layer->m_z.resize(layer->m_out_size, nobs);
+                    
+                    // Convolution
+                    convolve(prev_layer_data, layer);
+
+                    // Add bias terms
+                    int channel_start_row = 0;
+                    const int channel_nelem = layer->m_dim.conv_rows * layer->m_dim.conv_cols;
+
+                    for (int i = 0; i < layer->m_dim.out_channels; i++, channel_start_row += channel_nelem)
+                    {
+                        layer->m_z.block(channel_start_row, 0, channel_nelem, nobs).array() += layer->m_bias[i];
+                    }
+
+                    // Apply activation function
+                    layer->m_a.resize(layer->m_out_size, nobs);
+                    Activation::activate(layer->m_z, layer->m_a);
+                }
+        };
+
+        // TODO: the forward algorithm is same everywhere, the only difference is the convolve function. I need to 
+        //       refactor the code so that only to emphasize convolve function  
+        class GPUForwardStrategy : public ForwardStrategy {
+            private: 
+                void convolve(const Matrix& prev_layer_data, Convolutional<Activation>* layer) {
+                    const int nobs = prev_layer_data.cols();
+                    const int in_channels = layer->m_dim.in_channels;
+                    const int out_channels = layer->m_dim.out_channels;
+                    const int in_h = layer->m_dim.channel_rows;
+                    const int in_w = layer->m_dim.channel_cols;
+                    const int k_h = layer->m_dim.filter_rows;
+                    const int k_w = layer->m_dim.filter_cols;
+                    const int out_h = layer->m_dim.conv_rows;
+                    const int out_w = layer->m_dim.conv_cols;
+
+                    Scalar *d_in, *d_w, *d_out;
+                    size_t in_numelem = static_cast<size_t>(nobs) * in_channels * in_h * in_w;
+                    size_t w_numelem = static_cast<size_t>(in_channels) * out_channels * k_h * k_w;
+                    size_t out_numelem = static_cast<size_t>(nobs) * out_channels * out_h * out_w;
+
+                    cudaMalloc(&d_in, in_numelem * sizeof(Scalar));
+                    cudaMalloc(&d_w, w_numelem * sizeof(Scalar));
+                    cudaMalloc(&d_out, out_numelem * sizeof(Scalar));
+
+                    cudaMemcpy(d_in, prev_layer_data.data(), in_numelem * sizeof(Scalar), cudaMemcpyHostToDevice);
+                    cudaMemcpy(d_w, layer->m_filter_data.data(), w_numelem * sizeof(Scalar), cudaMemcpyHostToDevice);
+                    cudaMemset(d_out, 0, out_numelem * sizeof(Scalar));
+
+                    // dim3 blockSize(16, 16);
+                    dim3 blockSize(32, 32);
+                    dim3 gridSize((out_h * out_w + blockSize.x - 1) / blockSize.x,
+                                  (nobs * out_channels + blockSize.y - 1) / blockSize.y);
+
+                    convolve_kernel<<<gridSize, blockSize>>>(nobs, in_channels, out_channels, in_h, in_w, k_h, k_w, out_h, out_w, d_in, d_w, d_out);
+                    cudaDeviceSynchronize();
+
+                    cudaMemcpy(layer->m_z.data(), d_out, out_numelem * sizeof(Scalar), cudaMemcpyDeviceToHost);
+
+                    cudaFree(d_in);
+                    cudaFree(d_w);
+                    cudaFree(d_out);
+                }
+            public: 
+                virtual ~GPUForwardStrategy() = default; 
+                virtual void forward(const Matrix& prev_layer_data, Convolutional<Activation>* layer) override {
                     // Each column is an observation
                     const int nobs = prev_layer_data.cols(); // Number of images in the batch 
                     // Linear term, z = conv(in, w) + b
@@ -183,7 +284,6 @@ class Convolutional: public Layer
                   window_width)
         {
             m_forward_strategy = std::make_unique<MiniDNNForwardStrategy>();
-            // m_forward_strategy = std::make_unique<CPUForwardStrategy>();
         }
 
         void init(const Scalar& mu, const Scalar& sigma, RNG& rng)
@@ -216,28 +316,6 @@ class Convolutional: public Layer
         void forward(const Matrix& prev_layer_data)
         {
             m_forward_strategy->forward(prev_layer_data, this);
-            // // Each column is an observation
-            // const int nobs = prev_layer_data.cols(); // Number of images in the batch 
-            // // Linear term, z = conv(in, w) + b
-            // m_z.resize(this->m_out_size, nobs);
-            // // Convolution
-            // internal::convolve_valid(m_dim, prev_layer_data.data(), true, nobs,
-            //                          m_filter_data.data(), m_z.data()
-            //                         );
-            // // Add bias terms
-            // // Each column of m_z contains m_dim.out_channels channels, and each channel has
-            // // m_dim.conv_rows * m_dim.conv_cols elements
-            // int channel_start_row = 0;
-            // const int channel_nelem = m_dim.conv_rows * m_dim.conv_cols;
-
-            // for (int i = 0; i < m_dim.out_channels; i++, channel_start_row += channel_nelem)
-            // {
-            //     m_z.block(channel_start_row, 0, channel_nelem, nobs).array() += m_bias[i];
-            // }
-
-            // // Apply activation function
-            // m_a.resize(this->m_out_size, nobs);
-            // Activation::activate(m_z, m_a);
         }
 
         const Matrix& output() const
