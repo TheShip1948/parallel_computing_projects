@@ -16,7 +16,7 @@ if not exist %EXECUTABLE% (
 :: Run Nsight Systems profiling
 echo.
 echo ===========================================================
-echo Profiling %EXECUTABLE% with NVIDIA Nsight Systems
+echo Profiling %EXECUTABLE% with NVIDIA Nsight Systems (NSYS)
 echo ===========================================================
 echo.
 
