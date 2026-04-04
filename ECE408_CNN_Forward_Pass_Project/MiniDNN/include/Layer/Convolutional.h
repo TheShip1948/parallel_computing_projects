@@ -20,7 +20,7 @@ namespace MiniDNN
     static __global__ void convolve_kernel(int nobs, int in_channels, int out_channels,
                                           int in_h, int in_w, int k_h, int k_w,
                                           int out_h, int out_w,
-                                          const Scalar* input, const Scalar* weights, Scalar* output)
+                                          const float* input, const float* weights, float* output)
     {
         int tx = blockIdx.x * blockDim.x + threadIdx.x; // maps to out_h * out_w (flat)
         int ty = blockIdx.y * blockDim.y + threadIdx.y; // maps to nobs * out_channels (flat)
@@ -32,11 +32,11 @@ namespace MiniDNN
             int row = tx % out_h; // Column-major: index % rows is row
             int col = tx / out_h; // Column-major: index / rows is col
 
-            Scalar sum = 0.0;
+            float sum = 0.0f;
             for (int in_c = 0; in_c < in_channels; in_c++)
             {
-                const Scalar* cur_in = input + n * (in_channels * in_h * in_w) + in_c * (in_h * in_w);
-                const Scalar* cur_w = weights + in_c * (out_channels * k_h * k_w) + out_c * (k_h * k_w);
+                const float* cur_in = input + n * (in_channels * in_h * in_w) + in_c * (in_h * in_w);
+                const float* cur_w = weights + in_c * (out_channels * k_h * k_w) + out_c * (k_h * k_w);
 
                 for (int i = 0; i < k_h; i++)
                 {
@@ -205,28 +205,54 @@ class Convolutional: public Layer
                     const int out_h = layer->m_dim.conv_rows;
                     const int out_w = layer->m_dim.conv_cols;
 
-                    Scalar *d_in, *d_w, *d_out;
+                    float *d_in, *d_w, *d_out;
                     size_t in_numelem = static_cast<size_t>(nobs) * in_channels * in_h * in_w;
                     size_t w_numelem = static_cast<size_t>(in_channels) * out_channels * k_h * k_w;
                     size_t out_numelem = static_cast<size_t>(nobs) * out_channels * out_h * out_w;
 
-                    cudaMalloc(&d_in, in_numelem * sizeof(Scalar));
-                    cudaMalloc(&d_w, w_numelem * sizeof(Scalar));
-                    cudaMalloc(&d_out, out_numelem * sizeof(Scalar));
+                    cudaMalloc(&d_in, in_numelem * sizeof(float));
+                    cudaMalloc(&d_w, w_numelem * sizeof(float));
+                    cudaMalloc(&d_out, out_numelem * sizeof(float));
 
-                    cudaMemcpy(d_in, prev_layer_data.data(), in_numelem * sizeof(Scalar), cudaMemcpyHostToDevice);
-                    cudaMemcpy(d_w, layer->m_filter_data.data(), w_numelem * sizeof(Scalar), cudaMemcpyHostToDevice);
-                    cudaMemset(d_out, 0, out_numelem * sizeof(Scalar));
+                    std::vector<float> h_in(in_numelem);
+                    std::vector<float> h_w(w_numelem);
+                    
+                    const Scalar* in_ptr = prev_layer_data.data();
+                    for(size_t i=0; i<in_numelem; ++i) h_in[i] = static_cast<float>(in_ptr[i]);
+                    const Scalar* w_ptr = layer->m_filter_data.data();
+                    for(size_t i=0; i<w_numelem; ++i) h_w[i] = static_cast<float>(w_ptr[i]);
+
+                    cudaMemcpy(d_in, h_in.data(), in_numelem * sizeof(float), cudaMemcpyHostToDevice);
+                    cudaMemcpy(d_w, h_w.data(), w_numelem * sizeof(float), cudaMemcpyHostToDevice);
+                    cudaMemset(d_out, 0, out_numelem * sizeof(float));
 
                     // dim3 blockSize(16, 16);
                     dim3 blockSize(32, 32);
                     dim3 gridSize((out_h * out_w + blockSize.x - 1) / blockSize.x,
                                   (nobs * out_channels + blockSize.y - 1) / blockSize.y);
 
+                    cudaEvent_t start, stop;
+                    cudaEventCreate(&start);
+                    cudaEventCreate(&stop);
+                    cudaEventRecord(start);
+
                     convolve_kernel<<<gridSize, blockSize>>>(nobs, in_channels, out_channels, in_h, in_w, k_h, k_w, out_h, out_w, d_in, d_w, d_out);
                     cudaDeviceSynchronize();
 
-                    cudaMemcpy(layer->m_z.data(), d_out, out_numelem * sizeof(Scalar), cudaMemcpyDeviceToHost);
+                    cudaEventRecord(stop);
+                    cudaEventSynchronize(stop);
+                    float milliseconds = 0;
+                    cudaEventElapsedTime(&milliseconds, start, stop);
+                    printf("[Pure Kernel Time - Float] Images: %d, InChannels: %d, OutChannels: %d, Time: %.3f ms\n", nobs, in_channels, out_channels, milliseconds);
+                    
+                    cudaEventDestroy(start);
+                    cudaEventDestroy(stop);
+
+                    std::vector<float> h_out(out_numelem);
+                    cudaMemcpy(h_out.data(), d_out, out_numelem * sizeof(float), cudaMemcpyDeviceToHost);
+
+                    Scalar* out_ptr = layer->m_z.data();
+                    for(size_t i=0; i<out_numelem; ++i) out_ptr[i] = static_cast<Scalar>(h_out[i]);
 
                     cudaFree(d_in);
                     cudaFree(d_w);
