@@ -205,32 +205,69 @@ class Convolutional: public Layer
                     const int out_h = layer->m_dim.conv_rows;
                     const int out_w = layer->m_dim.conv_cols;
 
-                    Scalar *d_in, *d_w, *d_out;
-                    size_t in_numelem = static_cast<size_t>(nobs) * in_channels * in_h * in_w;
+                    const int max_chunk_size = 40000;
+                    const int num_chunks = (nobs + max_chunk_size - 1) / max_chunk_size;
+                    const int num_streams = num_chunks;
+
                     size_t w_numelem = static_cast<size_t>(in_channels) * out_channels * k_h * k_w;
-                    size_t out_numelem = static_cast<size_t>(nobs) * out_channels * out_h * out_w;
-
-                    cudaMalloc(&d_in, in_numelem * sizeof(Scalar));
+                    Scalar *d_w;
                     cudaMalloc(&d_w, w_numelem * sizeof(Scalar));
-                    cudaMalloc(&d_out, out_numelem * sizeof(Scalar));
-
-                    cudaMemcpy(d_in, prev_layer_data.data(), in_numelem * sizeof(Scalar), cudaMemcpyHostToDevice);
                     cudaMemcpy(d_w, layer->m_filter_data.data(), w_numelem * sizeof(Scalar), cudaMemcpyHostToDevice);
-                    cudaMemset(d_out, 0, out_numelem * sizeof(Scalar));
 
-                    // dim3 blockSize(16, 16);
-                    dim3 blockSize(32, 32);
-                    dim3 gridSize((out_h * out_w + blockSize.x - 1) / blockSize.x,
-                                  (nobs * out_channels + blockSize.y - 1) / blockSize.y);
+                    std::vector<Scalar*> d_in(num_streams);
+                    std::vector<Scalar*> d_out(num_streams);
+                    std::vector<cudaStream_t> streams(num_streams);
 
-                    convolve_kernel<<<gridSize, blockSize>>>(nobs, in_channels, out_channels, in_h, in_w, k_h, k_w, out_h, out_w, d_in, d_w, d_out);
-                    cudaDeviceSynchronize();
+                    size_t in_chunk_numelem = max_chunk_size * in_channels * in_h * in_w;
+                    size_t out_chunk_numelem = max_chunk_size * out_channels * out_h * out_w;
 
-                    cudaMemcpy(layer->m_z.data(), d_out, out_numelem * sizeof(Scalar), cudaMemcpyDeviceToHost);
+                    for(int i = 0; i < num_streams; ++i) {
+                        cudaMalloc(&d_in[i], in_chunk_numelem * sizeof(Scalar));
+                        cudaMalloc(&d_out[i], out_chunk_numelem * sizeof(Scalar));
+                        cudaStreamCreate(&streams[i]);
+                    }
 
-                    cudaFree(d_in);
+                    // Pin host memory for asynchronous DMA
+                    size_t total_in_bytes = static_cast<size_t>(nobs) * in_channels * in_h * in_w * sizeof(Scalar);
+                    size_t total_out_bytes = static_cast<size_t>(nobs) * out_channels * out_h * out_w * sizeof(Scalar);
+                    cudaHostRegister((void*)prev_layer_data.data(), total_in_bytes, cudaHostRegisterDefault);
+                    cudaHostRegister((void*)layer->m_z.data(), total_out_bytes, cudaHostRegisterDefault);
+
+                    for (int i = 0; i < num_chunks; ++i) {
+                        int s = i % num_streams;
+                        int current_nobs = std::min(max_chunk_size, nobs - i * max_chunk_size);
+                        
+                        size_t in_offset = static_cast<size_t>(i) * max_chunk_size * in_channels * in_h * in_w;
+                        size_t out_offset = static_cast<size_t>(i) * max_chunk_size * out_channels * out_h * out_w;
+
+                        size_t current_in_bytes = current_nobs * in_channels * in_h * in_w * sizeof(Scalar);
+                        size_t current_out_bytes = current_nobs * out_channels * out_h * out_w * sizeof(Scalar);
+
+                        cudaMemcpyAsync(d_in[s], prev_layer_data.data() + in_offset, current_in_bytes, cudaMemcpyHostToDevice, streams[s]);
+
+                        dim3 blockSize(32, 32);
+                        dim3 gridSize((out_h * out_w + blockSize.x - 1) / blockSize.x,
+                                      (current_nobs * out_channels + blockSize.y - 1) / blockSize.y);
+
+                        convolve_kernel<<<gridSize, blockSize, 0, streams[s]>>>(current_nobs, in_channels, out_channels, in_h, in_w, k_h, k_w, out_h, out_w, d_in[s], d_w, d_out[s]);
+
+                        cudaMemcpyAsync(layer->m_z.data() + out_offset, d_out[s], current_out_bytes, cudaMemcpyDeviceToHost, streams[s]);
+                    }
+
+                    for(int i = 0; i < num_streams; ++i) {
+                        cudaStreamSynchronize(streams[i]);
+                    }
+
+                    // Unpin memory
+                    cudaHostUnregister((void*)prev_layer_data.data());
+                    cudaHostUnregister((void*)layer->m_z.data());
+
+                    for(int i = 0; i < num_streams; ++i) {
+                        cudaStreamDestroy(streams[i]);
+                        cudaFree(d_in[i]);
+                        cudaFree(d_out[i]);
+                    }
                     cudaFree(d_w);
-                    cudaFree(d_out);
                 }
             public: 
                 virtual ~GPUForwardStrategy() = default; 
