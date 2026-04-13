@@ -17,39 +17,81 @@
 namespace MiniDNN
 {
 
+    const int TILE_WIDTH = 16;
+    // const int TILE_WIDTH = 32;
+
+    // Constant memory for weights (64KB limit = 8192 doubles)
+    __constant__ Scalar c_weights[8192];
+
     static __global__ void convolve_kernel(int nobs, int in_channels, int out_channels,
                                           int in_h, int in_w, int k_h, int k_w,
                                           int out_h, int out_w,
-                                          const Scalar* input, const Scalar* weights, Scalar* output)
+                                          const Scalar* weights, const Scalar* input, Scalar* output,
+                                          bool use_constant)
     {
-        int tx = blockIdx.x * blockDim.x + threadIdx.x; // maps to out_h * out_w (flat)
-        int ty = blockIdx.y * blockDim.y + threadIdx.y; // maps to nobs * out_channels (flat)
+        // Each blockIdx.x handles one (batch, out_channel) to avoid the 65535 limit on gridDim.z
+        int batch_channel = blockIdx.x;
+        if (batch_channel >= nobs * out_channels) return;
 
-        if (tx < out_h * out_w && ty < nobs * out_channels)
+        int n = batch_channel / out_channels;
+        int out_c = batch_channel % out_channels;
+
+        // Use blockIdx.y and blockIdx.z for spatial tiling
+        int out_col_start = blockIdx.y * TILE_WIDTH;
+        int out_row_start = blockIdx.z * TILE_WIDTH;
+
+        int out_col = out_col_start + threadIdx.x;
+        int out_row = out_row_start + threadIdx.y;
+
+        // Shared memory for one input channel tile
+        extern __shared__ Scalar shared_input[];
+        int tile_h = TILE_WIDTH + k_h - 1;
+        int tile_w = TILE_WIDTH + k_w - 1;
+
+        Scalar sum = 0.0;
+
+        for (int in_c = 0; in_c < in_channels; in_c++)
         {
-            int n = ty / out_channels;
-            int out_c = ty % out_channels;
-            int row = tx % out_h; // Column-major: index % rows is row
-            int col = tx / out_h; // Column-major: index / rows is col
-
-            Scalar sum = 0.0;
-            for (int in_c = 0; in_c < in_channels; in_c++)
+            // Load input tile for this channel into shared memory using flattened thread index
+            int tid = threadIdx.y * TILE_WIDTH + threadIdx.x;
+            for (int i = tid; i < tile_h * tile_w; i += TILE_WIDTH * TILE_WIDTH)
             {
-                const Scalar* cur_in = input + n * (in_channels * in_h * in_w) + in_c * (in_h * in_w);
-                const Scalar* cur_w = weights + in_c * (out_channels * k_h * k_w) + out_c * (k_h * k_w);
+                int r = i / tile_w;
+                int c = i % tile_w;
+                int in_row = out_row_start + r;
+                int in_col = out_col_start + c;
 
+                if (in_row < in_h && in_col < in_w)
+                {
+                    shared_input[i] = input[n * (in_channels * in_h * in_w) + in_c * (in_h * in_w) + in_col * in_h + in_row];
+                }
+                else
+                {
+                    shared_input[i] = 0.0;
+                }
+            }
+            __syncthreads();
+
+            // Compute convolution for this channel if within output bounds
+            if (out_row < out_h && out_col < out_w)
+            {
+                const Scalar* cur_w = use_constant ? 
+                                      (c_weights + in_c * (out_channels * k_h * k_w) + out_c * (k_h * k_w)) :
+                                      (weights + in_c * (out_channels * k_h * k_w) + out_c * (k_h * k_w));
                 for (int i = 0; i < k_h; i++)
                 {
                     for (int j = 0; j < k_w; j++)
                     {
-                        int in_row = row + i;
-                        int in_col = col + j;
-                        // Eigen layout: in_col * in_h + in_row
-                        sum += cur_in[in_col * in_h + in_row] * cur_w[j * k_h + i];
+                        sum += shared_input[(threadIdx.y + i) * tile_w + (threadIdx.x + j)] * cur_w[j * k_h + i];
                     }
                 }
             }
-            int output_idx = n * (out_channels * out_h * out_w) + out_c * (out_h * out_w) + col * out_h + row;
+            __syncthreads();
+        }
+
+        if (out_row < out_h && out_col < out_w)
+        {
+            int output_idx = n * (out_channels * out_h * out_w) + out_c * (out_h * out_w) + out_col * out_h + out_row;
             output[output_idx] = sum;
         }
     }
@@ -218,12 +260,28 @@ class Convolutional: public Layer
                     cudaMemcpy(d_w, layer->m_filter_data.data(), w_numelem * sizeof(Scalar), cudaMemcpyHostToDevice);
                     cudaMemset(d_out, 0, out_numelem * sizeof(Scalar));
 
-                    // dim3 blockSize(16, 16);
-                    dim3 blockSize(32, 32);
-                    dim3 gridSize((out_h * out_w + blockSize.x - 1) / blockSize.x,
-                                  (nobs * out_channels + blockSize.y - 1) / blockSize.y);
+                    dim3 blockSize(TILE_WIDTH, TILE_WIDTH);
+                    dim3 gridSize(static_cast<unsigned int>(nobs) * out_channels,
+                                  (out_w + TILE_WIDTH - 1) / TILE_WIDTH,
+                                  (out_h + TILE_WIDTH - 1) / TILE_WIDTH);
 
-                    convolve_kernel<<<gridSize, blockSize>>>(nobs, in_channels, out_channels, in_h, in_w, k_h, k_w, out_h, out_w, d_in, d_w, d_out);
+                    size_t sharedMemSize = (TILE_WIDTH + k_h - 1) * (TILE_WIDTH + k_w - 1) * sizeof(Scalar);
+                    
+                    bool use_constant = false;
+                    if (w_numelem <= 8192) {
+                        cudaError_t err = cudaMemcpyToSymbol(c_weights, layer->m_filter_data.data(), w_numelem * sizeof(Scalar));
+                        if (err == cudaSuccess) {
+                            use_constant = true;
+                        }
+                    }
+
+                    convolve_kernel<<<gridSize, blockSize, sharedMemSize>>>(nobs, in_channels, out_channels, in_h, in_w, k_h, k_w, out_h, out_w, d_w, d_in, d_out, use_constant);
+                    
+                    cudaError_t err = cudaGetLastError();
+                    if (err != cudaSuccess) {
+                        std::cerr << "Kernel launch error: " << cudaGetErrorString(err) << std::endl;
+                    }
+
                     cudaDeviceSynchronize();
 
                     cudaMemcpy(layer->m_z.data(), d_out, out_numelem * sizeof(Scalar), cudaMemcpyDeviceToHost);
