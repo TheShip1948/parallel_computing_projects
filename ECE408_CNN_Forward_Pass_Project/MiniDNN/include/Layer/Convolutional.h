@@ -20,7 +20,9 @@ namespace MiniDNN
     static __global__ void convolve_kernel(int nobs, int in_channels, int out_channels,
                                           int in_h, int in_w, int k_h, int k_w,
                                           int out_h, int out_w,
-                                          const Scalar* input, const Scalar* weights, Scalar* output)
+                                          const Scalar* __restrict__ input, 
+                                          const Scalar* __restrict__ weights, 
+                                          Scalar* __restrict__ output)
     {
         int tx = blockIdx.x * blockDim.x + threadIdx.x; // maps to out_h * out_w (flat)
         int ty = blockIdx.y * blockDim.y + threadIdx.y; // maps to nobs * out_channels (flat)
