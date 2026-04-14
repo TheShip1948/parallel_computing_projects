@@ -38,8 +38,10 @@ namespace MiniDNN
                 const Scalar* cur_in = input + n * (in_channels * in_h * in_w) + in_c * (in_h * in_w);
                 const Scalar* cur_w = weights + in_c * (out_channels * k_h * k_w) + out_c * (k_h * k_w);
 
+                #pragma unroll 
                 for (int i = 0; i < k_h; i++)
                 {
+                    #pragma unroll
                     for (int j = 0; j < k_w; j++)
                     {
                         int in_row = row + i;
