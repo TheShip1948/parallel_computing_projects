@@ -12,6 +12,7 @@
 #include "../Utils/Enum.h"
 #include <cuda_runtime.h>
 #include <iostream>
+#include <chrono>
 
 
 namespace MiniDNN
@@ -106,9 +107,12 @@ class Convolutional: public Layer
                     // Linear term, z = conv(in, w) + b
                     layer->m_z.resize(layer->m_out_size, nobs);
                     // Convolution
+                    auto start = std::chrono::high_resolution_clock::now();
                     internal::convolve_valid(layer->m_dim, prev_layer_data.data(), true, nobs,
                                             layer->m_filter_data.data(), layer->m_z.data()
                                     );
+                    auto end = std::chrono::high_resolution_clock::now();
+                    layer->m_last_conv_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
                     // Add bias terms
                     // Each column of m_z contains m_dim.out_channels channels, and each channel has
                     // m_dim.conv_rows * m_dim.conv_cols elements
@@ -173,7 +177,10 @@ class Convolutional: public Layer
                     layer->m_z.resize(layer->m_out_size, nobs);
                     
                     // Convolution
+                    auto start = std::chrono::high_resolution_clock::now();
                     convolve(prev_layer_data, layer);
+                    auto end = std::chrono::high_resolution_clock::now();
+                    layer->m_last_conv_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
 
                     // Add bias terms
                     int channel_start_row = 0;
@@ -278,7 +285,10 @@ class Convolutional: public Layer
                     layer->m_z.resize(layer->m_out_size, nobs);
                     
                     // Convolution
+                    auto start = std::chrono::high_resolution_clock::now();
                     convolve(prev_layer_data, layer);
+                    auto end = std::chrono::high_resolution_clock::now();
+                    layer->m_last_conv_time_ms = std::chrono::duration<double, std::milli>(end - start).count();
 
                     // Add bias terms
                     int channel_start_row = 0;
@@ -298,6 +308,8 @@ class Convolutional: public Layer
         private: 
             std::unique_ptr<ForwardStrategy> m_forward_strategy;
         public: 
+            double m_last_conv_time_ms;
+            double get_last_conv_time() const { return m_last_conv_time_ms; }
 
         void set_strategy(ForwardStrategy* strategy) {
             m_forward_strategy.reset(strategy);
