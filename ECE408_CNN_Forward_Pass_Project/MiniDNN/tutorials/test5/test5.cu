@@ -42,7 +42,8 @@ int main()
         return 1;
     }
 
-    std::vector<int> counts = {10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000};
+    // std::vector<int> counts = {10000, 20000, 30000, 40000, 50000, 60000, 70000, 80000, 90000, 100000};
+    std::vector<int> counts = {60000}; 
 
 
     int n_pixels = test_data.rows() * test_data.cols();
